@@ -185,8 +185,8 @@ export default function ScenarioFieldsPage() {
                 <input type="text" required autoFocus placeholder="ex: Objectif du scénario" value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))} disabled={submitting} />
               </div>
               <div className={styles.formGroup}>
-                <label>Description</label>
-                <input type="text" placeholder="Aide contextuelle pour l'admin" value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} disabled={submitting} />
+                <label>Description (utilisée par le chatbot pour préciser la question)</label>
+                <input type="text" placeholder="ex: Décris précisément l'information à collecter" value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} disabled={submitting} />
               </div>
               <div className={styles.formRow}>
                 <div className={styles.formGroup}>

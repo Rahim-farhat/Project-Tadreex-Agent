@@ -265,7 +265,7 @@ export default function FieldsPage() {
               </div>
 
               <div className={styles.formGroup}>
-                <label>Description (aide pour l&apos;admin)</label>
+                <label>Description (utilisée par le chatbot pour préciser la question)</label>
                 <input
                   type="text"
                   placeholder="ex: Le titre court et explicite de la formation VR"
