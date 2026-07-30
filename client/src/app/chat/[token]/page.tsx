@@ -302,7 +302,7 @@ export default function ChatbotPage() {
       <>
         <header className={styles.chatHeader}>
           <div className={styles.headerLeft}>
-            <span className={styles.headerLogo}>🎓</span>
+            <img src="/tadreex.png" alt="Tadreex" className={styles.headerLogo} />
             <div>
               <div className={styles.headerTitle}>Tadreex Creator</div>
               <div className={styles.headerSubtitle}>Assistant de conception VR</div>
@@ -373,7 +373,7 @@ export default function ChatbotPage() {
       <div className={styles.chatPage}>
         <header className={styles.chatHeader}>
           <div className={styles.headerLeft}>
-            <span className={styles.headerLogo}>🎓</span>
+            <img src="/tadreex.png" alt="Tadreex" className={styles.headerLogo} />
             <div>
               <div className={styles.headerTitle}>Tadreex Creator</div>
               <div className={styles.headerSubtitle}>Récapitulatif des informations</div>
@@ -394,7 +394,7 @@ export default function ChatbotPage() {
               <tr><th>Champ</th><th>Réponse</th><th></th></tr>
             </thead>
             <tbody>
-              {Object.entries(answers).map(([key, val]) => (
+              {Object.entries(answers).filter(([key]) => key !== 'scenes').map(([key, val]) => (
                 <tr key={key}>
                   <td className={styles.reviewLabel}>{key}</td>
                   <td className={styles.reviewValue}>
@@ -436,7 +436,7 @@ export default function ChatbotPage() {
       <div className={styles.chatPage}>
         <header className={styles.chatHeader}>
           <div className={styles.headerLeft}>
-            <span className={styles.headerLogo}>🎓</span>
+            <img src="/tadreex.png" alt="Tadreex" className={styles.headerLogo} />
             <div>
               <div className={styles.headerTitle}>Tadreex Creator</div>
               <div className={styles.headerSubtitle}>Construction des scénarios</div>

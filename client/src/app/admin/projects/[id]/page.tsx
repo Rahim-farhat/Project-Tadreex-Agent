@@ -16,6 +16,11 @@ interface Scene {
   etapes: Etape[];
 }
 
+interface ScenarioBlock {
+  name: string;
+  answers: Record<string, any>;
+}
+
 interface Project {
   _id: string;
   title: string;
@@ -23,11 +28,12 @@ interface Project {
   clientToken: string;
   currentStep: number;
   answers: Record<string, any>;
+  scenarios: ScenarioBlock[];
 }
 
 const EMPTY = <span className={styles.emptyValue}>—</span>;
 
-function PreviewPanel({ answers }: { answers: Record<string, any> }) {
+function PreviewPanel({ answers, scenarios }: { answers: Record<string, any>; scenarios: ScenarioBlock[] }) {
   const scenes = (answers.scenes || []) as Scene[];
   const fieldKeys = Object.keys(answers).filter((k) => k !== 'scenes');
 
@@ -98,6 +104,35 @@ function PreviewPanel({ answers }: { answers: Record<string, any> }) {
           ))
         )}
       </div>
+
+      {scenarios.length > 0 && (
+        <div className={styles.card}>
+          <h2>Réponses des scénarios ({scenarios.length})</h2>
+          {scenarios.map((sc, si) => {
+            const sKeys = Object.keys(sc.answers);
+            return (
+              <div key={si} className={styles.sceneBlock}>
+                <h3 className={styles.sceneTitle}>
+                  <span className={styles.sceneNum}>{si + 1}</span>
+                  {sc.name}
+                </h3>
+                {sKeys.length === 0 ? (
+                  <p className={styles.muted}>Aucune réponse.</p>
+                ) : (
+                  <dl className={styles.defList}>
+                    {sKeys.map((k) => (
+                      <div key={k} className={styles.defRow}>
+                        <dt>{k}</dt>
+                        <dd>{Array.isArray(sc.answers[k]) ? sc.answers[k].join(', ') : String(sc.answers[k])}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -204,7 +239,7 @@ export default function ProjectDetailPage() {
         </button>
       </div>
 
-      {activeTab === 'preview' && <PreviewPanel answers={answers} />}
+      {activeTab === 'preview' && <PreviewPanel answers={answers} scenarios={project?.scenarios || []} />}
 
       {activeTab === 'edit' && (
         <div className={styles.content}>

@@ -50,7 +50,7 @@ export default function AdminLogin() {
     <div className={styles.container}>
       <div className={styles.card}>
         <div className={styles.header}>
-          <div className={styles.logo}>🎓 Tadreex Admin</div>
+          <div className={styles.logo}><img src="/tadreex.png" alt="Tadreex" className={styles.logoImg} /> Tadreex Admin</div>
           <p className={styles.subtitle}>Sign in to access the dashboard</p>
         </div>
 

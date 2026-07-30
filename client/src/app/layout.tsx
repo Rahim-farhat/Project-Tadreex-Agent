@@ -4,6 +4,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Tadreex Agent",
   description: "AI-powered tutoring and chat platform",
+  icons: {
+    icon: "/tadreex.png",
+    apple: "/tadreex.png",
+  },
 };
 
 export default function RootLayout({

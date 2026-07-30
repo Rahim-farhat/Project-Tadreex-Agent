@@ -1,18 +1,28 @@
-import type { Metadata } from 'next';
+'use client';
+
+import { useEffect, useState } from 'react';
 import styles from './admin.module.css';
 
-export const metadata: Metadata = {
-  title: 'Admin Dashboard | Tadreex Agent',
-  description: 'Manage users, conversations, and platform settings.',
-};
-
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('tadreex-theme') as 'dark' | 'light' | null;
+    if (saved) setTheme(saved);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('tadreex-theme', theme);
+  }, [theme]);
+
+  const toggle = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+
   return (
     <div className={styles.shell}>
-      {/* Sidebar */}
       <aside className={styles.sidebar}>
         <div className={styles.sidebarLogo}>
-          <span>🎓</span>
+          <img src="/tadreex.png" alt="Tadreex" className={styles.logoImg} />
           <span>Tadreex</span>
         </div>
         <nav className={styles.nav}>
@@ -31,18 +41,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <a href="/admin/users" className={styles.navItem}>
             <span>👥</span> Users
           </a>
-          <a href="/admin/conversations" className={styles.navItem}>
-            <span>💬</span> Conversations
-          </a>
         </nav>
         <div className={styles.sidebarFooter}>
-          <a href="/chat" className={styles.navItem}>
-            <span>←</span> Back to Chat
-          </a>
+          <button onClick={toggle} className={styles.themeToggle}>
+            {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
+          </button>
         </div>
       </aside>
 
-      {/* Main content area */}
       <main className={styles.content}>{children}</main>
     </div>
   );

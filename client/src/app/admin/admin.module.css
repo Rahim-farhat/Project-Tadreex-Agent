@@ -28,6 +28,12 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.logoImg {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
 .nav {
   flex: 1;
   padding: 1rem 0.75rem;
@@ -55,6 +61,26 @@
 .sidebarFooter {
   padding: 1rem 0.75rem 0;
   border-top: 1px solid var(--color-border);
+}
+
+.themeToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  transition: all var(--transition);
+}
+.themeToggle:hover {
+  color: var(--color-text);
+  border-color: var(--color-text);
 }
 
 /* Main content */

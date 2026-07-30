@@ -98,7 +98,7 @@
   text-align: right;
 }
 
-.copyBtn, .editBtn {
+.copyBtn, .actionBtn, .editBtn {
   background: transparent;
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
@@ -109,9 +109,14 @@
   transition: all var(--transition);
 }
 
-.copyBtn:hover {
+.copyBtn:hover, .actionBtn:hover {
   color: var(--color-text);
   border-color: var(--color-text);
+}
+
+.dangerBtn:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
 }
 
 .editBtn:hover {
@@ -129,7 +134,7 @@
 .modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--color-overlay);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -204,6 +209,22 @@
   background: var(--color-accent-hover);
 }
 .saveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.deleteBtn {
+  background: var(--color-danger);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.25rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+.deleteBtn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.deleteBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
