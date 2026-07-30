@@ -1,0 +1,59 @@
+.container { display: flex; flex-direction: column; gap: 2rem; }
+.header { display: flex; justify-content: space-between; align-items: center; }
+.title { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 0.25rem; }
+.subtitle { color: var(--color-text-muted); font-size: 0.95rem; }
+.createBtn { background: var(--color-accent); color: #fff; border: none; padding: 0.75rem 1.25rem; border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; }
+.createBtn:hover { background: var(--color-accent-hover); }
+.loading { text-align: center; padding: 3rem; color: var(--color-text-muted); }
+.tableWrapper { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); overflow: hidden; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { padding: 1rem 1.25rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+.table th { background: rgba(255,255,255,0.02); font-weight: 600; color: var(--color-text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.table tbody tr:hover { background: var(--color-surface-2); }
+.badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 99px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+.badgeText { background: rgba(108,99,255,0.15); color: var(--color-accent-hover); }
+.badgeRadio { background: rgba(34,197,94,0.15); color: var(--color-success); }
+.badgeCheckbox { background: rgba(251,191,36,0.15); color: #fbbf24; }
+.badgeActive { background: rgba(34,197,94,0.15); color: var(--color-success); }
+.badgeInactive { background: rgba(136,146,164,0.2); color: var(--color-text-muted); }
+.optionsList { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.optionTag { background: var(--color-surface-2); border: 1px solid var(--color-border); padding: 0.2rem 0.5rem; border-radius: 99px; font-size: 0.75rem; color: var(--color-text-muted); }
+.actionsCol { text-align: right; white-space: nowrap; }
+.actionBtn { background: transparent; border: 1px solid var(--color-border); color: var(--color-text-muted); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); font-size: 0.8rem; margin-left: 0.5rem; cursor: pointer; }
+.actionBtn:hover { color: var(--color-text); border-color: var(--color-text); }
+.actionBtn.danger:hover { color: var(--color-danger); border-color: var(--color-danger); }
+.emptyState { text-align: center; padding: 3rem !important; color: var(--color-text-muted); }
+.modalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.modal { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); padding: 2rem; width: 100%; max-width: 520px; box-shadow: var(--shadow); }
+.modal h2 { margin-bottom: 1.5rem; font-size: 1.25rem; }
+.formGroup { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem; }
+.formGroup label { font-size: 0.85rem; color: var(--color-text-muted); font-weight: 500; }
+.formGroup input, .formGroup textarea, .formGroup select { padding: 0.75rem; background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-family: inherit; font-size: 0.9rem; outline: none; }
+.formGroup input:focus, .formGroup textarea:focus, .formGroup select:focus { border-color: var(--color-accent); }
+.formRow { display: flex; gap: 1rem; }
+.formRow > .formGroup { flex: 1; }
+.optionsEditor { display: flex; flex-direction: column; gap: 0.5rem; }
+.optionRow { display: flex; gap: 0.5rem; align-items: center; }
+.optionRow input { flex: 1; padding: 0.6rem 0.75rem; background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.85rem; outline: none; }
+.optionRow input:focus { border-color: var(--color-accent); }
+.removeOptionBtn { background: transparent; border: none; color: var(--color-danger); font-size: 1.1rem; cursor: pointer; padding: 0.25rem; line-height: 1; }
+.addOptionBtn { background: transparent; border: 1px dashed var(--color-border); color: var(--color-text-muted); padding: 0.5rem; border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer; }
+.addOptionBtn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+.modalActions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem; }
+.cancelBtn { background: transparent; border: none; color: var(--color-text-muted); font-weight: 500; font-size: 0.9rem; cursor: pointer; }
+.cancelBtn:hover { color: var(--color-text); }
+.saveBtn { background: var(--color-accent); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: var(--radius-sm); font-weight: 600; font-size: 0.9rem; cursor: pointer; }
+.saveBtn:hover:not(:disabled) { background: var(--color-accent-hover); }
+.saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.toggleWrapper { display: flex; align-items: center; gap: 0.5rem; }
+.toggle { position: relative; width: 40px; height: 22px; background: var(--color-border); border-radius: 99px; cursor: pointer; }
+.toggle.active { background: var(--color-accent); }
+.toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: #fff; border-radius: 50%; }
+.toggle.active::after { transform: translateX(18px); }
+.confirmOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 60; }
+.confirmBox { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); padding: 2rem; max-width: 380px; text-align: center; box-shadow: var(--shadow); }
+.confirmBox h3 { margin-bottom: 0.75rem; }
+.confirmBox p { color: var(--color-text-muted); margin-bottom: 1.5rem; font-size: 0.9rem; }
+.confirmActions { display: flex; justify-content: center; gap: 1rem; }
+.confirmDeleteBtn { background: var(--color-danger); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; }
+.confirmDeleteBtn:hover { opacity: 0.9; }
