@@ -53,6 +53,28 @@
   color: var(--color-text-muted);
   transition: background var(--transition), color var(--transition);
 }
+
+.navIcon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  filter: invert(1);
+}
+
+[data-theme="light"] .navIcon {
+  filter: none;
+}
+
+.themeIcon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: invert(1);
+}
+
+[data-theme="light"] .themeIcon {
+  filter: none;
+}
 .navItem:hover {
   background: var(--color-surface-2);
   color: var(--color-text);

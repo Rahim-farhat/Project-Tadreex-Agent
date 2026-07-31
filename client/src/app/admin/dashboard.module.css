@@ -32,7 +32,16 @@
   transform: translateY(-2px);
 }
 
-.statIcon { font-size: 1.5rem; }
+.statIcon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  filter: invert(1);
+}
+
+[data-theme="light"] .statIcon {
+  filter: none;
+}
 .statLabel { font-size: 0.85rem; color: var(--color-text-muted); }
 .statValue { font-size: 2rem; font-weight: 700; }
 

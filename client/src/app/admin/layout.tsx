@@ -27,24 +27,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
         <nav className={styles.nav}>
           <a href="/admin" className={styles.navItem}>
-            <span>📊</span> Overview
+            <img src="/overview.png" alt="Overview" className={styles.navIcon} /> Overview
           </a>
           <a href="/admin/projects" className={styles.navItem}>
-            <span>📁</span> Projects
+            <img src="/projects.png" alt="Projects" className={styles.navIcon} /> Projects
           </a>
           <a href="/admin/fields" className={styles.navItem}>
-            <span>🧩</span> Chat Fields
+            <img src="/chat-fields.png" alt="Chat Fields" className={styles.navIcon} /> Chat Fields
           </a>
           <a href="/admin/scenario-fields" className={styles.navItem}>
-            <span>🎬</span> Scenario Fields
+            <img src="/scenario.png" alt="Scenario Fields" className={styles.navIcon} /> Scenario Fields
           </a>
           <a href="/admin/users" className={styles.navItem}>
-            <span>👥</span> Users
+            <img src="/uers.png" alt="Users" className={styles.navIcon} /> Users
           </a>
         </nav>
         <div className={styles.sidebarFooter}>
           <button onClick={toggle} className={styles.themeToggle}>
-            {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
+            <img src="/night-light-mode.png" alt="Theme" className={styles.themeIcon} /> {theme === 'dark' ? 'Light' : 'Dark'}
           </button>
         </div>
       </aside>

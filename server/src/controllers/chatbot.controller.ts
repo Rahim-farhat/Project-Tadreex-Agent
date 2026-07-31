@@ -655,12 +655,14 @@ export const handleChatMessage = async (
     if (userMessage === "__confirm__") {
       project.phase = "scenario";
       project.status = "in_progress";
-      project.scenarios.push({
-        name: "Scénario 1",
-        currentField: 0,
-        chatHistory: [],
-        answers: {},
-      });
+      if (project.scenarios.length === 0) {
+        project.scenarios.push({
+          name: "Scénario 1",
+          currentField: 0,
+          chatHistory: [],
+          answers: {},
+        });
+      }
       await project.save();
       respond(res, {
         phase: "scenario",
@@ -676,6 +678,25 @@ export const handleChatMessage = async (
       project.status = "completed";
       await project.save();
       respond(res, { phase: "completed" });
+      return;
+    }
+
+    if (userMessage === "__back_to_review__") {
+      project.phase = "review";
+      await project.save();
+      respond(res, { phase: "review", answers: project.answers });
+      return;
+    }
+
+    if (userMessage === "__reset__") {
+      project.phase = "info";
+      project.status = "draft";
+      project.currentStep = 0;
+      project.answers = { scenes: [] };
+      project.infoChatHistory = [];
+      project.scenarios = [];
+      await project.save();
+      respond(res, { phase: "info", reset: true });
       return;
     }
 

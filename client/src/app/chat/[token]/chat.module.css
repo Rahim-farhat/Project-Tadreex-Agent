@@ -90,6 +90,26 @@
   min-width: 200px;
 }
 
+.headerActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.resetBtn {
+  padding: 0.3rem 0.6rem;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  border-radius: 0.4rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.resetBtn:hover {
+  color: var(--color-text);
+  border-color: var(--color-text);
+}
+
 .stepLabel {
   font-size: 0.78rem;
   color: var(--color-text-muted);
@@ -139,19 +159,27 @@
 }
 
 .avatar {
-  font-size: 1.25rem;
   flex-shrink: 0;
   width: 2rem;
-  text-align: center;
-  padding-top: 0.1rem;
+  height: 2rem;
+  object-fit: contain;
+  filter: invert(1);
+}
+
+[data-theme="light"] .avatar {
+  filter: none;
 }
 
 .userAvatar {
-  font-size: 1.25rem;
   flex-shrink: 0;
   width: 2rem;
-  text-align: center;
-  padding-top: 0.1rem;
+  height: 2rem;
+  object-fit: contain;
+  filter: invert(1);
+}
+
+[data-theme="light"] .userAvatar {
+  filter: none;
 }
 
 /* ── Bubbles ─────────────────────────────────────────────────────── */
@@ -263,6 +291,9 @@
 }
 
 .helpBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   padding: 0.75rem 1rem;
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
@@ -273,6 +304,17 @@
   cursor: pointer;
   transition: all 0.2s;
   flex-shrink: 0;
+}
+
+.helpIcon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: invert(1);
+}
+
+[data-theme="light"] .helpIcon {
+  filter: none;
 }
 
 .helpBtn:hover:not(:disabled) {

@@ -20,19 +20,19 @@ export default function AdminOverviewPage() {
 
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
-          <div className={styles.statIcon}>📁</div>
+          <img src="/projects.png" alt="Projects" className={styles.statIcon} />
           <div className={styles.statLabel}>Total Projects</div>
           <div className={styles.statValue}>{projectCount !== null ? projectCount : '...'}</div>
         </div>
         <div className={styles.statCard}>
-          <div className={styles.statIcon}>🧩</div>
+          <img src="/chat-fields.png" alt="Chat Fields" className={styles.statIcon} />
           <div className={styles.statLabel}>Chat Fields</div>
           <div className={styles.statValue}>
             <a href="/admin/fields" style={{ color: 'inherit' }}>Manage →</a>
           </div>
         </div>
         <div className={styles.statCard}>
-          <div className={styles.statIcon}>🎬</div>
+          <img src="/scenario.png" alt="Scenario Fields" className={styles.statIcon} />
           <div className={styles.statLabel}>Scenario Fields</div>
           <div className={styles.statValue}>
             <a href="/admin/scenario-fields" style={{ color: 'inherit' }}>Manage →</a>

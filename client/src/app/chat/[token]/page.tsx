@@ -274,6 +274,43 @@ export default function ChatbotPage() {
     setPhase("completed");
   };
 
+  const backToReview = async () => {
+    try {
+      const res = await fetch(`/api/public/chat/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userMessage: "__back_to_review__" }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setPhase("review");
+      setAnswers(data.answers || {});
+    } catch { /* ignore */ }
+  };
+
+  const resetChat = async () => {
+    if (!window.confirm("Tout réinitialiser ? Toutes les réponses seront effacées.")) return;
+    try {
+      const res = await fetch(`/api/public/chat/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userMessage: "__reset__" }),
+      });
+      if (!res.ok) return;
+      setInfoMessages([]);
+      setInfoStep(0);
+      setInfoInputDisabled(false);
+      setCurrentFieldLabel(null);
+      setScenarioMessages({});
+      setScenarioStep({});
+      setScenarioDone({});
+      setScenarios([]);
+      setActiveScenario(null);
+      setPhase("info");
+      await initChat();
+    } catch { /* ignore */ }
+  };
+
   // ─── Render Helpers ──────────────────────────────────────────
 
   const renderMarkdown = (text: string) => {
@@ -297,7 +334,7 @@ export default function ChatbotPage() {
     step: number,
     total: number,
   ) => {
-    const progressPct = total > 0 ? Math.min(((step + 1) / (total + 1)) * 100, 100) : 0;
+    const progressPct = total > 0 ? Math.min((step / total) * 100, 100) : 0;
     return (
       <>
         <header className={styles.chatHeader}>
@@ -309,15 +346,16 @@ export default function ChatbotPage() {
             </div>
           </div>
           <div className={styles.headerRight}>
-            <span className={styles.stepLabel}>{label ? `${step + 1}/${total + 1} — ${label}` : ""}</span>
+            <span className={styles.stepLabel}>{label ? `${Math.min(step + 1, total)}/${total} — ${label}` : ""}</span>
             <div className={styles.progressBar}><div className={styles.progressFill} style={{ width: `${progressPct}%` }} /></div>
+            <button className={styles.resetBtn} onClick={resetChat} title="Réinitialiser le chat">↻ Réinitialiser</button>
           </div>
         </header>
 
         <main className={styles.messageList}>
           {messages.map((msg, idx) => (
             <div key={idx} className={`${styles.messageRow} ${msg.role === "user" ? styles.userRow : styles.botRow}`}>
-              {msg.role === "bot" && <div className={styles.avatar}>🤖</div>}
+              {msg.role === "bot" && <img src="/chatbot-icon.png" alt="Bot" className={styles.avatar} />}
               <div className={`${styles.bubble} ${msg.role === "user" ? styles.userBubble : styles.botBubble}`}>
                 <div className={styles.bubbleText}>{renderMarkdown(msg.content)}</div>
                 {msg.role === "bot" && msg.options && idx === messages.length - 1 && (
@@ -328,12 +366,12 @@ export default function ChatbotPage() {
                   </div>
                 )}
               </div>
-              {msg.role === "user" && <div className={styles.userAvatar}>👤</div>}
+              {msg.role === "user" && <img src="/user.png" alt="User" className={styles.userAvatar} />}
             </div>
           ))}
           {sending && (
             <div className={`${styles.messageRow} ${styles.botRow}`}>
-              <div className={styles.avatar}>🤖</div>
+              <img src="/chatbot-icon.png" alt="Bot" className={styles.avatar} />
               <div className={`${styles.bubble} ${styles.botBubble} ${styles.typingBubble}`}>
                 <span className={styles.dot} /><span className={styles.dot} /><span className={styles.dot} />
               </div>
@@ -343,7 +381,9 @@ export default function ChatbotPage() {
         </main>
 
         <footer className={styles.inputBar}>
-          <button className={styles.helpBtn} onClick={() => send("__help__")} disabled={sending}>Aide</button>
+          <button className={styles.helpBtn} onClick={() => send("__help__")} disabled={sending} title="Aide">
+            <img src="/help.png" alt="Aide" className={styles.helpIcon} /> Aide
+          </button>
           <textarea className={styles.textInput} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }} placeholder={inputDisabled ? "Choisissez ci-dessus..." : "Votre réponse... (Entrée)"} disabled={inputDisabled} rows={1} />
           <button className={styles.sendBtn} onClick={() => send(input)} disabled={!input.trim() || sending || inputDisabled}>➤</button>
         </footer>
@@ -382,6 +422,7 @@ export default function ChatbotPage() {
           <div className={styles.headerRight}>
             <span className={styles.stepLabel}>Phase info — terminée</span>
             <div className={styles.progressBar}><div className={styles.progressFill} style={{ width: "100%" }} /></div>
+            <button className={styles.resetBtn} onClick={resetChat} title="Réinitialiser le chat">↻ Réinitialiser</button>
           </div>
         </header>
 
@@ -444,6 +485,10 @@ export default function ChatbotPage() {
           </div>
           <div className={styles.headerRight}>
             <span className={styles.stepLabel}>{scenarios.length} scénario(s)</span>
+            <div className={styles.headerActions}>
+              <button className={styles.resetBtn} onClick={backToReview} title="Retour aux réponses des questions générales">← Réponses</button>
+              <button className={styles.resetBtn} onClick={resetChat} title="Réinitialiser le chat">↻ Réinitialiser</button>
+            </div>
           </div>
         </header>
 
