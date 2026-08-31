@@ -101,6 +101,16 @@ const stepModifySchema = z.object({
     .describe("Confirmation courte si des valeurs sont mises à jour, ou question de clarification si aucune valeur exploitable (en français)."),
 });
 
+const suggestionsSchema = z.object({
+  suggestions: z
+    .array(z.string())
+    .min(2)
+    .max(4)
+    .describe(
+      "Suggestions complètes, rédigées en français, directement utilisables comme la réponse du participant au champ demandé (sans tiret, sans mise en forme markdown).",
+    ),
+});
+
 // ─── Field Cache ─────────────────────────────────────────────────────────────
 
 let infoCache: IChatField[] = [];
@@ -183,7 +193,7 @@ Varie les formulations : Noté/Compris/Enregistré/OK/Parfait.
 Information reçue : "${value}" pour "${fieldName}"`;
 }
 
-function buildHelpPrompt(
+function buildInfoSuggestionsPrompt(
   field: IChatField,
   answers: Record<string, any>,
 ): string {
@@ -204,11 +214,18 @@ function buildHelpPrompt(
   let ctx = `Question actuelle : **${field.label}**.`;
   if (field.description) ctx += ` ${field.description}`;
   if (field.options.length)
-    ctx += `\nOptions possibles : ${field.options.join(", ")}`;
+    ctx += `\nOptions possibles (le participant doit répondre par l'une d'elles) : ${field.options.join(", ")}`;
   if (previousAnswers)
-    ctx += `\nContexte du projet déjà connu (utilise-le pour personnaliser tes exemples) :\n${previousAnswers}`;
+    ctx += `\nContexte du projet déjà connu (à utiliser pour personnaliser les exemples) :\n${previousAnswers}`;
 
-  return `Tu aides l'utilisateur à répondre à cette question précise. Appuie-toi sur le contexte du projet déjà connu quand c'est pertinent, pour donner des exemples adaptés à son cas plutôt que génériques. Max 4 lignes, donne 2-3 exemples concrets. Utilise **gras** pour les termes-clés. Format concis.\n${ctx}`;
+  return `Tu proposes des réponses toutes prêtes à l'utilisateur pour renseigner « ${field.label} ».
+${ctx}
+
+CHAQUE suggestion doit :
+- Être une réponse complète, directement utilisable telle quelle pour « ${field.label} »
+- Être en français correct, concise (1 à 2 lignes max)
+- Être adaptée au contexte du projet connu${field.options.length ? "\n- Respecter l'une des options possibles (la reprendre plus ou moins telle quelle)" : ""}
+- Sans puces ni mise en forme markdown dans la suggestion elle-même`;
 }
 
 // ─── History Helper ────────────────────────────────────────────────────────────
@@ -246,15 +263,15 @@ async function sendAck(value: string, fieldName: string): Promise<string> {
   return response.content.toString().trim();
 }
 
-async function sendHelp(
+async function sendInfoSuggestions(
   field: IChatField,
   answers: Record<string, any>,
-): Promise<string> {
-  const prompt = buildHelpPrompt(field, answers);
-  const response = await getStrongLlm().invoke([
-    { role: "system", content: prompt },
-  ]);
-  return response.content.toString().trim();
+): Promise<string[]> {
+  const prompt = buildInfoSuggestionsPrompt(field, answers);
+  const r = await getStrongLlm()
+    .withStructuredOutput(suggestionsSchema)
+    .invoke([{ role: "system", content: prompt }]);
+  return r.suggestions || [];
 }
 
 // ─── Validators ────────────────────────────────────────────────────────────────
@@ -385,7 +402,11 @@ async function handleHelpInfo(project: any, fields: IChatField[]) {
     };
   }
   const f = fields[step];
-  const botMsg = await sendHelp(f, project.answers);
+  const suggestions = await sendInfoSuggestions(f, project.answers);
+  const botMsg =
+    suggestions.length > 0
+      ? `Voici quelques suggestions pour **${f.label}**. Sélectionnez-en une ou plusieurs, modifiez-les si besoin, puis validez.`
+      : `Je n'ai pas trouvé de suggestions pour « ${f.label} ». Répondez directement dans votre style.`;
   project.infoChatHistory.push(
     { role: "user", content: "[Aide]" },
     { role: "bot", content: botMsg },
@@ -394,8 +415,9 @@ async function handleHelpInfo(project: any, fields: IChatField[]) {
   await project.save();
   return {
     botMessage: botMsg,
-    options: getOptionsForField(f),
-    inputDisabled: f.type === "radio" && f.options.length > 0,
+    ...(suggestions.length > 0 ? { suggestions } : {}),
+    options: null,
+    inputDisabled: false,
     phase: "info" as const,
     currentFieldLabel: f.label,
     totalFields: fields.length,
@@ -813,7 +835,7 @@ RÈGLES STRICTES :
 - Ne parle PAS des autres champs.`;
 }
 
-function buildStepHelpPrompt(
+function buildStepSuggestionsPrompt(
   fieldKey: string,
   scenarioName: string,
   stepIndex: number,
@@ -850,17 +872,18 @@ function buildStepHelpPrompt(
     .map(([k, v]) => `- ${getScenarioFieldSpec(k, dbFields).label || k} : ${v}`)
     .join("\n");
 
-  return `Tu aides l'utilisateur à renseigner le champ « ${spec.label} » pour l'Étape n°${stepIndex + 1}${stepTitre ? ` (« ${stepTitre} »)` : ""} du scénario « ${scenarioName} ».
+  return `Tu proposes des réponses toutes prêtes (suggestions) à l'utilisateur pour renseigner le champ « ${spec.label} » de l'Étape n°${stepIndex + 1}${stepTitre ? ` (« ${stepTitre} »)` : ""} du scénario « ${scenarioName} ».
 ${projectContext}
 ${knownFields ? `Informations déjà définies pour cette étape :\n${knownFields}\n` : ""}
 
 Type d'informations attendues pour ce champ : ${spec.description}
 ${spec.forbidden ? `ATTENTION INTERDIT DANS CE CHAMP : ${spec.forbidden}\n` : ""}
 
-CONSIGNE :
-- Propose 2 ou 3 exemples concrets de réponses, sous forme de tirets (- ...), STRICTEMENT conformes à « ${spec.label} » (attendu : ${spec.description}) et au sujet de cette étape (${stepTitre || `Étape ${stepIndex + 1}`}).
-${spec.forbidden ? `- NE DONNE PAS : ${spec.forbidden}.\n` : ""}
-- Max 4 lignes au total. Utilise **gras** sur les termes-clés. Format concis et prêt à être réutilisé.`;
+CHAQUE suggestion doit :
+- Être directement utilisable telle quelle comme LA réponse du participant pour « ${spec.label} » (pas de tiret, pas de liste à puces, pas de mise en forme markdown)
+- Être STRICTEMENT conforme à « ${spec.label} » (attendu : ${spec.description}) et au sujet de cette étape (${stepTitre || `Étape ${stepIndex + 1}`})
+- Varier les approches (2-3 suggestions différentes mais toutes valides)
+- Être concise (1 à 2 lignes max) et en français correct${spec.forbidden ? `\n- NE PAS PORTER SUR : ${spec.forbidden}.` : ""}`;
 }
 
 function stepResponse(
@@ -964,15 +987,15 @@ async function askStepField(
   return response.content.toString().trim();
 }
 
-async function sendStepHelp(
+async function sendStepSuggestions(
   fieldKey: string,
   scenarioName: string,
   stepIndex: number,
   step: any,
   projectAnswers?: Record<string, any>,
-): Promise<string> {
+): Promise<string[]> {
   const dbFields = await getActiveScenarioFields();
-  const prompt = buildStepHelpPrompt(
+  const prompt = buildStepSuggestionsPrompt(
     fieldKey,
     scenarioName,
     stepIndex,
@@ -980,10 +1003,10 @@ async function sendStepHelp(
     projectAnswers,
     dbFields,
   );
-  const response = await getStrongLlm().invoke([
-    { role: "system", content: prompt },
-  ]);
-  return response.content.toString().trim();
+  const r = await getStrongLlm()
+    .withStructuredOutput(suggestionsSchema)
+    .invoke([{ role: "system", content: prompt }]);
+  return r.suggestions || [];
 }
 
 async function initStepChat(
@@ -1029,14 +1052,20 @@ async function handleStepHelp(
   const step = steps[stepIndex];
   const missing = nextMissingFieldKey(step, dbFields);
   let botMessage: string;
+  let suggestions: string[] = [];
   if (missing) {
-    botMessage = await sendStepHelp(
+    const spec = getScenarioFieldSpec(missing, dbFields);
+    suggestions = await sendStepSuggestions(
       missing,
       scenario.name,
       stepIndex,
       step,
       project.answers,
     );
+    botMessage =
+      suggestions.length > 0
+        ? `Voici quelques suggestions pour **${spec.label}**. Sélectionnez-en une ou plusieurs, modifiez-les si besoin, puis validez.`
+        : `Je n'ai pas trouvé de suggestions pour « ${spec.label} ». Décrivez directement ${spec.label} de cette étape.`;
   } else {
     botMessage = buildStepRecap(scenario.name, stepIndex, step, dbFields);
   }
@@ -1046,7 +1075,10 @@ async function handleStepHelp(
     { role: "bot", content: botMessage },
   );
   await persistScenario(project);
-  return stepResponse(project, scenario, botMessage, !missing);
+  return {
+    ...stepResponse(project, scenario, botMessage, !missing),
+    ...(suggestions.length > 0 ? { suggestions } : {}),
+  };
 }
 
 async function applyStepModify(

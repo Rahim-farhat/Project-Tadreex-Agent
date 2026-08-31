@@ -8,7 +8,88 @@ interface ChatMessage {
   role: "user" | "bot";
   content: string;
   options?: string[] | null;
+  suggestions?: string[] | null;
   inputDisabled?: boolean;
+}
+
+function SuggestionPicker({
+  suggestions,
+  disabled,
+  onValidate,
+}: {
+  suggestions: string[];
+  disabled: boolean;
+  onValidate: (text: string) => void;
+}) {
+  const [selected, setSelected] = useState<number[]>([]);
+  const [text, setText] = useState("");
+
+  const toggle = (i: number) => {
+    setSelected((prev) => {
+      const has = prev.includes(i);
+      const next = has ? prev.filter((x) => x !== i) : [...prev, i];
+      setText(next.map((x) => suggestions[x]).join("\n"));
+      return next;
+    });
+  };
+
+  const validate = () => {
+    const value = text.trim();
+    if (!value || disabled) return;
+    onValidate(value);
+  };
+
+  return (
+    <div className={styles.suggestionsContainer}>
+      <div className={styles.suggestionsHeader}>
+        <span>Suggestions</span>
+      </div>
+      <div className={styles.suggestionList}>
+        {suggestions.map((s, i) => {
+          const isSelected = selected.includes(i);
+          return (
+            <div
+              key={i}
+              className={`${styles.suggestionCard} ${isSelected ? styles.suggestionCardSelected : ""}`}
+              onClick={() => toggle(i)}
+            >
+              <span className={styles.suggestionCheckbox}>
+                {isSelected ? "✓" : ""}
+              </span>
+              <span className={styles.suggestionText}>{s}</span>
+            </div>
+          );
+        })}
+      </div>
+      <textarea
+        className={styles.textInput}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Sélectionnez ci-dessus ou tapez votre réponse..."
+        rows={2}
+        disabled={disabled}
+      />
+      <div className={styles.suggestionActions}>
+        <button
+          className={styles.suggestionInsertBtn}
+          onClick={() => {
+            setSelected([]);
+            setText("");
+          }}
+          disabled={disabled}
+        >
+          Effacer
+        </button>
+        <button
+          className={styles.suggestionValidateBtn}
+          onClick={validate}
+          disabled={disabled || !text.trim()}
+        >
+          Valider →
+        </button>
+      </div>
+    </div>
+  );
 }
 
 interface ScenarioBlock {
@@ -151,6 +232,7 @@ export default function ChatbotPage() {
           role: "bot",
           content: data.botMessage,
           options: data.options,
+          suggestions: data.suggestions,
           inputDisabled: data.inputDisabled,
         },
       ]);
@@ -200,6 +282,7 @@ export default function ChatbotPage() {
           role: "bot",
           content: data.botMessage,
           options: data.options,
+          suggestions: data.suggestions,
           inputDisabled: data.inputDisabled,
         },
       ]);
@@ -276,6 +359,7 @@ export default function ChatbotPage() {
               role: "bot",
               content: data.botMessage,
               options: null,
+              suggestions: data.suggestions,
               inputDisabled: false,
             },
           ],
@@ -340,6 +424,7 @@ export default function ChatbotPage() {
         role: "bot",
         content: data.botMessage,
         options: null,
+        suggestions: data.suggestions,
         inputDisabled: false,
       };
       setStepMessages((prev) => ({
@@ -676,9 +761,14 @@ export default function ChatbotPage() {
                 <div className={styles.bubbleText}>
                   {renderMarkdown(msg.content)}
                 </div>
-                {msg.role === "bot" &&
-                  msg.options &&
-                  idx === messages.length - 1 && (
+                {msg.role === "bot" && idx === messages.length - 1 && (
+                  msg.suggestions && msg.suggestions.length > 0 ? (
+                    <SuggestionPicker
+                      suggestions={msg.suggestions}
+                      disabled={sending || inputDisabled}
+                      onValidate={(t) => send(t)}
+                    />
+                  ) : msg.options ? (
                     <div className={styles.optionButtons}>
                       {msg.options.map((opt) => (
                         <button
@@ -691,7 +781,8 @@ export default function ChatbotPage() {
                         </button>
                       ))}
                     </div>
-                  )}
+                  ) : null
+                )}
               </div>
               {msg.role === "user" && (
                 <img src="/user.png" alt="User" className={styles.userAvatar} />

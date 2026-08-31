@@ -239,6 +239,139 @@
   cursor: not-allowed;
 }
 
+/* ── Selectable Suggestions ───────────────────────────────────────── */
+.suggestionsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  padding: 0.9rem;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 10px);
+}
+
+.suggestionsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.2rem;
+}
+
+.suggestionList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.suggestionCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.suggestionCard:hover {
+  border-color: var(--color-accent);
+  background: rgba(108, 99, 255, 0.05);
+}
+
+.suggestionCardSelected {
+  border-color: var(--color-accent);
+  background: rgba(108, 99, 255, 0.12);
+}
+
+.suggestionCheckbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: #fff;
+  transition: all 0.15s ease;
+}
+
+.suggestionCardSelected .suggestionCheckbox {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.suggestionText {
+  flex: 1;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--color-text);
+}
+
+.suggestionActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--color-border);
+}
+
+.suggestionInsertBtn {
+  padding: 0.45rem 0.85rem;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  border-radius: 99px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.suggestionInsertBtn:hover {
+  color: var(--color-text);
+  border-color: var(--color-text);
+}
+
+.suggestionValidateBtn {
+  padding: 0.45rem 1.1rem;
+  background: var(--color-accent);
+  border: none;
+  color: #fff;
+  border-radius: 99px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.suggestionValidateBtn:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  transform: translateY(-1px);
+}
+
+.suggestionValidateBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Typing indicator ────────────────────────────────────────────── */
 .typingBubble {
   display: flex;
