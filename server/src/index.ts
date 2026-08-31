@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "./config/db";
 import authRoutes from "./routes/auth.routes";
-import chatRoutes from "./routes/chat.routes";
+
 import adminRoutes from "./routes/admin.routes";
 import projectRoutes from "./routes/project.routes";
 import "dotenv/config";
@@ -31,10 +31,16 @@ import publicProjectRoutes from "./routes/public.project.routes";
 import chatbotRoutes from "./routes/chatbot.routes";
 import chatfieldRoutes from "./routes/chatfield.routes";
 import scenariofieldRoutes from "./routes/scenariofield.routes";
+import Settings from "./models/Settings";
+import {
+  setGroqModelStrong,
+  setGroqModelFast,
+  setGroqTemperatures,
+} from "./controllers/chatbot.controller";
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
-app.use("/api/chat", chatRoutes);
+
 app.use("/api/admin/projects", projectRoutes);
 app.use("/api/admin/chatfields", chatfieldRoutes);
 app.use("/api/admin/scenario-fields", scenariofieldRoutes);
@@ -50,6 +56,21 @@ app.use((_req, res) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 const start = async () => {
   await connectDB();
+  // Load model settings from DB (if present)
+  try {
+    const s = await Settings.findOne();
+    if (s) {
+      setGroqModelStrong(s.groqModelStrong);
+      setGroqModelFast(s.groqModelFast);
+      setGroqTemperatures(
+        s.groqTemperature ?? 0.1,
+        s.groqFastTemperature ?? 0.2,
+      );
+      console.log("Loaded GROQ model settings from DB");
+    }
+  } catch (err) {
+    console.warn("Could not load settings:", err);
+  }
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
   });

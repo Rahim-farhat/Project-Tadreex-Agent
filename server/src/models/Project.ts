@@ -26,12 +26,34 @@ export interface IChatTurn {
   content: string;
 }
 
+// A step row of a scenario built by the smart chatbot (Phase 2)
+export interface IStepRow {
+  numero: string;
+  titre: string;
+  action: string;
+  resultat: string;
+  objets3d: string;
+  ui: string;
+  animations: string;
+  validation: string;
+  statut: string;
+  chatHistory?: IChatTurn[];
+}
+
+// Smart builder state kept on each scenario block
+export interface IScenarioBuilder {
+  state: 'collecting' | 'done';
+  pendingStepIndex?: number | null;
+  pendingFields?: string[] | null;
+}
+
 // A scenario block within the project (Phase 2)
 export interface IScenarioBlock {
   name: string;
   currentField: number;
   chatHistory: IChatTurn[];
   answers: Record<string, any>;
+  builder: IScenarioBuilder;
 }
 
 export interface IProject extends Document {
@@ -60,6 +82,10 @@ const ScenarioBlockSchema = new Schema<IScenarioBlock>(
     currentField: { type: Number, default: 0 },
     chatHistory: { type: [ChatTurnSchema], default: [] },
     answers: { type: Schema.Types.Mixed, default: () => ({}) },
+    builder: {
+      type: Schema.Types.Mixed,
+      default: () => ({ state: 'collecting', pendingStepIndex: null, pendingFields: null }),
+    },
   },
   { _id: true }
 );

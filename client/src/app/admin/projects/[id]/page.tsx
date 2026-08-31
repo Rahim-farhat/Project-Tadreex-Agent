@@ -16,9 +16,22 @@ interface Scene {
   etapes: Etape[];
 }
 
+interface StepRow {
+  numero?: string;
+  titre?: string;
+  action?: string;
+  resultat?: string;
+  objets3d?: string;
+  ui?: string;
+  animations?: string;
+  validation?: string;
+  statut?: string;
+}
+
 interface ScenarioBlock {
   name: string;
   answers: Record<string, any>;
+  builder?: { state?: string };
 }
 
 interface Project {
@@ -32,6 +45,53 @@ interface Project {
 }
 
 const EMPTY = <span className={styles.emptyValue}>—</span>;
+
+const SCENARIO_COLUMNS: Array<{ key: keyof StepRow; label: string }> = [
+  { key: "numero", label: "N°" },
+  { key: "titre", label: "Titre de l'étape" },
+  { key: "action", label: "Action gestuelle" },
+  { key: "resultat", label: "Résultat / Interaction" },
+  { key: "objets3d", label: "Objets 3D" },
+  { key: "ui", label: "Interface (UI)" },
+  { key: "animations", label: "Animations / VFX" },
+  { key: "validation", label: "Validation" },
+  { key: "statut", label: "Statut" },
+];
+
+function StepTable({ steps }: { steps: StepRow[] }) {
+  return (
+    <div className={styles.stepTableWrap}>
+      <table className={styles.stepTable}>
+        <thead>
+          <tr>
+            {SCENARIO_COLUMNS.map((c) => (
+              <th key={c.key}>{c.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {steps.length === 0 ? (
+            <tr>
+              <td colSpan={SCENARIO_COLUMNS.length} className={styles.muted}>
+                Aucune étape définie.
+              </td>
+            </tr>
+          ) : (
+            steps.map((step, i) => (
+              <tr key={i}>
+                {SCENARIO_COLUMNS.map((c) => (
+                  <td key={c.key}>
+                    {step[c.key] ? String(step[c.key]) : EMPTY}
+                  </td>
+                ))}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function PreviewPanel({ answers, scenarios }: { answers: Record<string, any>; scenarios: ScenarioBlock[] }) {
   const scenes = (answers.scenes || []) as Scene[];
@@ -107,16 +167,27 @@ function PreviewPanel({ answers, scenarios }: { answers: Record<string, any>; sc
 
       {scenarios.length > 0 && (
         <div className={styles.card}>
-          <h2>Réponses des scénarios ({scenarios.length})</h2>
+          <h2>Scénarios ({scenarios.length})</h2>
           {scenarios.map((sc, si) => {
-            const sKeys = Object.keys(sc.answers);
+            const steps = Array.isArray(sc.answers?.steps)
+              ? (sc.answers.steps as StepRow[])
+              : null;
+            const sKeys = steps ? [] : Object.keys(sc.answers || {});
+            const isDone = sc.builder?.state === 'done';
             return (
               <div key={si} className={styles.sceneBlock}>
                 <h3 className={styles.sceneTitle}>
                   <span className={styles.sceneNum}>{si + 1}</span>
                   {sc.name}
+                  <span
+                    className={`${styles.scenarioStatus} ${isDone ? styles.scenarioStatusDone : ''}`}
+                  >
+                    {isDone ? 'Terminé' : 'En cours'}
+                  </span>
                 </h3>
-                {sKeys.length === 0 ? (
+                {steps !== null ? (
+                  <StepTable steps={steps} />
+                ) : sKeys.length === 0 ? (
                   <p className={styles.muted}>Aucune réponse.</p>
                 ) : (
                   <dl className={styles.defList}>

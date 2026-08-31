@@ -22,7 +22,7 @@ export const getScenarioFieldById = async (req: Request, res: Response): Promise
 
 export const createScenarioField = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { label, description, type, options, required, order, active } = req.body;
+    const { key, label, description, forbidden, type, options, required, order, active } = req.body;
     if (!label || !label.trim()) { res.status(400).json({ message: 'Field label is required' }); return; }
     let finalOrder = order;
     if (finalOrder === undefined || finalOrder === null) {
@@ -30,8 +30,10 @@ export const createScenarioField = async (req: Request, res: Response): Promise<
       finalOrder = (maxOrder?.order ?? -1) + 1;
     }
     const field = await ScenarioField.create({
+      key: key?.trim() || label.trim().toLowerCase().replace(/[^a-z0-9]/g, '_'),
       label: label.trim(),
       description: description?.trim() || '',
+      forbidden: forbidden?.trim() || '',
       type: type || 'text',
       options: options || [],
       required: required !== false,
@@ -48,9 +50,11 @@ export const updateScenarioField = async (req: Request, res: Response): Promise<
   try {
     const field = await ScenarioField.findById(req.params.id);
     if (!field) { res.status(404).json({ message: 'Scenario field not found' }); return; }
-    const { label, description, type, options, required, order, active } = req.body;
+    const { key, label, description, forbidden, type, options, required, order, active } = req.body;
+    if (key !== undefined) field.key = key.trim();
     if (label !== undefined) field.label = label.trim();
     if (description !== undefined) field.description = description.trim();
+    if (forbidden !== undefined) field.forbidden = forbidden.trim();
     if (type !== undefined) { field.type = type; if (type === 'text') field.options = []; }
     if (options !== undefined) field.options = options;
     if (required !== undefined) field.required = required;

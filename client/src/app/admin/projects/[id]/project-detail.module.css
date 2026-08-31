@@ -294,3 +294,57 @@
   font-weight: 700;
   color: var(--color-text-muted);
 }
+
+/* ── Scenario status + step table ────────────────────────────── */
+.scenarioStatus {
+  margin-left: auto;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.scenarioStatusDone {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.stepTableWrap {
+  overflow-x: auto;
+  margin-left: 2.5rem;
+}
+
+.stepTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 900px;
+}
+
+.stepTable th,
+.stepTable td {
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+  border: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.stepTable th {
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.stepTable tbody tr:hover td {
+  background: var(--color-surface-2);
+}
