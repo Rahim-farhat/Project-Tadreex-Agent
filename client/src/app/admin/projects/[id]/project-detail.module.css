@@ -8,6 +8,8 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
   padding-bottom: 1.5rem;
   border-bottom: 1px solid var(--color-border);
 }
@@ -25,8 +27,8 @@
 
 .title {
   font-size: 2rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-weight: 700;
+  letter-spacing: -0.025em;
   margin-bottom: 0.25rem;
 }
 
@@ -44,8 +46,9 @@
 
 .actions {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .statusSelect {
@@ -347,4 +350,23 @@
 
 .stepTable tbody tr:hover td {
   background: var(--color-surface-2);
+}
+
+.tokenText a:hover code {
+  color: var(--color-accent);
+}
+
+.copyInline {
+  margin-left: 0.25rem;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+}
+.copyInline:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }

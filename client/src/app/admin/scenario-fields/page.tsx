@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { adminFetch, errorMessage } from '@/lib/api';
+import { useToast } from '@/components/useToast';
 import styles from './scenario-fields.module.css';
 
 interface ScenarioField {
@@ -30,6 +32,7 @@ const EMPTY_FIELD: Omit<ScenarioField, '_id' | 'createdAt'> = {
 };
 
 export default function ScenarioFieldsPage() {
+  const { toast, Toast } = useToast();
   const [fields, setFields] = useState<ScenarioField[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -45,7 +48,7 @@ export default function ScenarioFieldsPage() {
 
   const fetchFields = async () => {
     try {
-      const res = await fetch('/api/admin/scenario-fields');
+      const res = await adminFetch('/api/admin/scenario-fields');
       if (res.ok) setFields(await res.json());
     } catch (e) {
       console.error('Failed to fetch scenario fields', e);
@@ -84,24 +87,30 @@ export default function ScenarioFieldsPage() {
     setSubmitting(true);
     try {
       if (editingField) {
-        const res = await fetch(`/api/admin/scenario-fields/${editingField._id}`, {
+        const res = await adminFetch(`/api/admin/scenario-fields/${editingField._id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(form),
         });
         if (res.ok) {
           setShowModal(false);
+          toast('Enregistré');
           fetchFields();
+        } else {
+          toast(await errorMessage(res, "Échec de l'enregistrement"), 'error');
         }
       } else {
-        const res = await fetch('/api/admin/scenario-fields', {
+        const res = await adminFetch('/api/admin/scenario-fields', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(form),
         });
         if (res.ok) {
           setShowModal(false);
+          toast('Enregistré');
           fetchFields();
+        } else {
+          toast(await errorMessage(res, "Échec de l'enregistrement"), 'error');
         }
       }
     } catch (e) {
@@ -113,12 +122,13 @@ export default function ScenarioFieldsPage() {
 
   const toggleActive = async (field: ScenarioField) => {
     try {
-      const res = await fetch(`/api/admin/scenario-fields/${field._id}`, {
+      const res = await adminFetch(`/api/admin/scenario-fields/${field._id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !field.active }),
       });
       if (res.ok) fetchFields();
+      else toast(await errorMessage(res, 'Échec de la mise à jour'), 'error');
     } catch (e) {
       console.error('Failed to toggle active status', e);
     }
@@ -127,7 +137,7 @@ export default function ScenarioFieldsPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/admin/scenario-fields/${deleteTarget._id}`, {
+      const res = await adminFetch(`/api/admin/scenario-fields/${deleteTarget._id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -204,7 +214,10 @@ export default function ScenarioFieldsPage() {
                   </td>
                   <td>
                     <div className={styles.toggleWrapper}>
-                      <div
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={field.active}
                         className={`${styles.toggle} ${field.active ? styles.active : ''}`}
                         onClick={() => toggleActive(field)}
                         title={field.active ? 'Désactiver' : 'Activer'}
@@ -316,7 +329,10 @@ export default function ScenarioFieldsPage() {
                 <div className={styles.formGroup}>
                   <label>Actif</label>
                   <div className={styles.toggleWrapper} style={{ marginTop: '0.5rem' }}>
-                    <div
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={form.active}
                       className={`${styles.toggle} ${form.active ? styles.active : ''}`}
                       onClick={() => setForm((p) => ({ ...p, active: !p.active }))}
                     />
@@ -420,6 +436,7 @@ export default function ScenarioFieldsPage() {
           </div>
         </div>
       )}
+      <Toast />
     </div>
   );
 }

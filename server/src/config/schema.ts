@@ -1,0 +1,71 @@
+// Applied on every start; every statement must stay idempotent.
+// IDs are text so records migrated from MongoDB keep their ObjectId (and
+// existing links keep working); new rows get a UUID.
+export const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+  id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  name        TEXT NOT NULL,
+  email       TEXT NOT NULL UNIQUE,
+  password    TEXT NOT NULL,
+  role        TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS chat_fields (
+  id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  label       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  type        TEXT NOT NULL DEFAULT 'text' CHECK (type IN ('text', 'radio', 'checkbox')),
+  options     TEXT[] NOT NULL DEFAULT '{}',
+  required    BOOLEAN NOT NULL DEFAULT true,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  active      BOOLEAN NOT NULL DEFAULT true,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS scenario_fields (
+  id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  key         TEXT NOT NULL,
+  label       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  forbidden   TEXT NOT NULL DEFAULT '',
+  type        TEXT NOT NULL DEFAULT 'text' CHECK (type IN ('text', 'radio', 'checkbox')),
+  options     TEXT[] NOT NULL DEFAULT '{}',
+  required    BOOLEAN NOT NULL DEFAULT true,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  active      BOOLEAN NOT NULL DEFAULT true,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  id                     INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  groq_model_strong      TEXT NOT NULL DEFAULT 'openai/gpt-oss-120b',
+  groq_model_fast        TEXT NOT NULL DEFAULT 'openai/gpt-oss-20b',
+  groq_temperature       DOUBLE PRECISION NOT NULL DEFAULT 0.1,
+  groq_fast_temperature  DOUBLE PRECISION NOT NULL DEFAULT 0.2,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+  id                 TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  title              TEXT NOT NULL,
+  status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'in_progress', 'completed')),
+  client_token       TEXT NOT NULL UNIQUE,
+  created_by         TEXT,
+  phase              TEXT NOT NULL DEFAULT 'info' CHECK (phase IN ('info', 'review', 'scenario', 'completed')),
+  current_step       INTEGER NOT NULL DEFAULT 0,
+  info_chat_history  JSONB NOT NULL DEFAULT '[]',
+  answers            JSONB NOT NULL DEFAULT '{"scenes": []}',
+  scenarios          JSONB NOT NULL DEFAULT '[]',
+  uploaded_files     JSONB NOT NULL DEFAULT '[]',
+  sheet_url          TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS projects_created_at_idx ON projects (created_at DESC);
+`;

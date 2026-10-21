@@ -1,22 +1,42 @@
-import mongoose from 'mongoose';
-import dns from 'dns';
+import { Pool, QueryResultRow } from 'pg';
+import { SCHEMA_SQL } from './schema';
 
-// Force Node.js to use Google public DNS to resolve MongoDB Atlas SRV records.
-// The local network DNS server fails to handle SRV queries correctly.
-dns.setServers(['8.8.8.8', '8.8.4.4']);
+const connectionString = process.env.DATABASE_URL;
 
-export const connectDB = async (): Promise<void> => {
-  const uri = process.env.MONGODB_URI;
+if (!connectionString) {
+  console.error('❌ DATABASE_URL is not defined in environment variables');
+  process.exit(1);
+}
 
-  if (!uri) {
-    throw new Error('MONGODB_URI is not defined in environment variables');
-  }
+export const pool = new Pool({ connectionString, max: 10 });
 
-  try {
-    await mongoose.connect(uri);
-    console.log('✅ MongoDB connected successfully');
-  } catch (error) {
-    console.error('❌ MongoDB connection error:', error);
-    process.exit(1);
+pool.on('error', (err) => {
+  console.error('Unexpected PostgreSQL client error:', err);
+});
+
+export const query = async <T extends QueryResultRow = any>(
+  text: string,
+  params: unknown[] = [],
+): Promise<T[]> => {
+  const { rows } = await pool.query<T>(text, params);
+  return rows;
+};
+
+// Connects and applies the (idempotent) schema. Retries so the API can start
+// before the database container is ready to accept connections.
+export const connectDB = async (retries = 10): Promise<void> => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await pool.query(SCHEMA_SQL);
+      console.log('✅ PostgreSQL connected, schema up to date');
+      return;
+    } catch (error) {
+      if (attempt >= retries) {
+        console.error('❌ PostgreSQL connection error:', error);
+        process.exit(1);
+      }
+      console.warn(`PostgreSQL not ready (attempt ${attempt}/${retries}), retrying in 2s…`);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
   }
 };

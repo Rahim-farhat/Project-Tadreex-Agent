@@ -7,8 +7,10 @@ import {
   deleteChatField,
   reorderChatFields,
 } from '../controllers/chatfield.controller';
+import { validateId } from '../middleware/validateId';
 
 const router = Router();
+router.param('id', validateId);
 
 router.get('/', getChatFields);
 router.post('/', createChatField);

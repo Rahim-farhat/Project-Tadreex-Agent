@@ -1,0 +1,21 @@
+# Local development database only:
+#   docker compose -f docker-compose.dev.yml up -d
+# then in server/.env:
+#   DATABASE_URL=postgres://scenarios:scenarios@localhost:5435/scenarios
+name: scenarios-platform-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: scenarios
+      POSTGRES_USER: scenarios
+      POSTGRES_PASSWORD: scenarios
+    ports:
+      - "127.0.0.1:5435:5432"
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+
+volumes:
+  pgdata-dev:

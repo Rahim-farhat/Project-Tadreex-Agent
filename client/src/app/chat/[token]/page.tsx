@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import styles from "./chat.module.css";
+import { Icon } from "@/components/Icon";
 
 interface ChatMessage {
   role: "user" | "bot";
@@ -92,6 +93,96 @@ function SuggestionPicker({
   );
 }
 
+function OptionPicker({
+  options,
+  multiple,
+  disabled,
+  onValidate,
+}: {
+  options: string[];
+  multiple: boolean;
+  disabled: boolean;
+  onValidate: (text: string) => void;
+}) {
+  const [selected, setSelected] = useState<number[]>([]);
+  const [text, setText] = useState("");
+
+  const toggle = (i: number) => {
+    setSelected((prev) => {
+      let next: number[];
+      if (!multiple) {
+        next = [i];
+      } else {
+        const has = prev.includes(i);
+        next = has ? prev.filter((x) => x !== i) : [...prev, i];
+      }
+      setText(next.map((x) => options[x]).join("\n"));
+      return next;
+    });
+  };
+
+  const validate = () => {
+    const value = text.trim();
+    if (!value || disabled) return;
+    onValidate(value);
+  };
+
+  return (
+    <div className={styles.suggestionsContainer}>
+      <div className={styles.suggestionsHeader}>
+        <span>{multiple ? "Sélectionnez une ou plusieurs options" : "Choisissez une option"}</span>
+      </div>
+      <div className={styles.suggestionList}>
+        {options.map((opt, i) => {
+          const isSelected = selected.includes(i);
+          return (
+            <div
+              key={i}
+              className={`${styles.suggestionCard} ${isSelected ? styles.suggestionCardSelected : ""}`}
+              onClick={() => toggle(i)}
+            >
+              <span className={styles.suggestionCheckbox}>
+                {isSelected ? "✓" : ""}
+              </span>
+              <span className={styles.suggestionText}>{opt}</span>
+            </div>
+          );
+        })}
+      </div>
+      <textarea
+        className={styles.textInput}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setSelected([]);
+        }}
+        placeholder="Sélectionnez ci-dessus ou tapez votre réponse..."
+        rows={2}
+        disabled={disabled}
+      />
+      <div className={styles.suggestionActions}>
+        <button
+          className={styles.suggestionInsertBtn}
+          onClick={() => {
+            setSelected([]);
+            setText("");
+          }}
+          disabled={disabled}
+        >
+          Effacer
+        </button>
+        <button
+          className={styles.suggestionValidateBtn}
+          onClick={validate}
+          disabled={disabled || !text.trim()}
+        >
+          Valider →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface ScenarioBlock {
   _id?: string;
   name: string;
@@ -99,7 +190,6 @@ interface ScenarioBlock {
   answers: Record<string, any>;
   builder?: { state?: string };
 }
-
 interface ScenarioStep {
   numero?: string;
   titre?: string;
@@ -118,9 +208,17 @@ export default function ChatbotPage() {
 
   // Core state
   const [phase, setPhase] = useState<
-    "loading" | "info" | "review" | "scenario" | "completed"
+    "loading" | "info" | "review" | "scenario" | "completed" | "error"
   >("loading");
   const [error, setError] = useState("");
+  // Transient banner for failed actions (network/server errors)
+  const [notice, setNotice] = useState("");
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showNotice = (msg: string) => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    setNotice(msg);
+    noticeTimer.current = setTimeout(() => setNotice(""), 4000);
+  };
 
   // Info phase
   const [infoMessages, setInfoMessages] = useState<ChatMessage[]>([]);
@@ -137,6 +235,8 @@ export default function ChatbotPage() {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   // Scenario phase
   const [scenarios, setScenarios] = useState<ScenarioBlock[]>([]);
@@ -158,14 +258,23 @@ export default function ChatbotPage() {
   const [renameName, setRenameName] = useState("");
   const [renamingScenario, setRenamingScenario] = useState(false);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    const el = chatBottomRef.current;
+    const scroller = el?.parentElement;
+    if (scroller) {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior });
+    } else {
+      el?.scrollIntoView({ behavior, block: "end" });
+    }
+  };
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollToBottom();
   }, [infoMessages]);
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollToBottom();
   }, [stepMessages, activeStep]);
 
   // ─── Init ──────────────────────────────────────────────────────
@@ -179,8 +288,12 @@ export default function ChatbotPage() {
     try {
       const projectRes = await fetch(`/api/public/projects/${token}`);
       if (!projectRes.ok) {
-        setError("Projet introuvable ou lien invalide.");
-        setPhase("completed");
+        setError(
+          projectRes.status === 404
+            ? "Projet introuvable ou lien invalide."
+            : "Le serveur ne répond pas correctement. Réessayez plus tard.",
+        );
+        setPhase("error");
         return;
       }
       const projectData = await projectRes.json();
@@ -210,10 +323,10 @@ export default function ChatbotPage() {
 
       setPhase(projectData.phase || "info");
       setInfoStep(projectData.currentStep || 0);
-      if (projectData.phase === "info") await initChat();
+      if ((projectData.phase || "info") === "info") await initChat();
     } catch {
       setError("Erreur de connexion au serveur.");
-      setPhase("completed");
+      setPhase("error");
     }
   };
 
@@ -226,7 +339,18 @@ export default function ChatbotPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userMessage: "__init__" }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setInfoMessages([
+          { role: "bot", content: data.message || "Erreur. Réessayez." },
+        ]);
+        return;
+      }
+      if (data.phase === "review") {
+        setPhase("review");
+        setAnswers(data.answers || {});
+        return;
+      }
       setInfoMessages([
         {
           role: "bot",
@@ -265,8 +389,8 @@ export default function ChatbotPage() {
         body: JSON.stringify({ userMessage: text }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message);
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Erreur. Réessayez.");
       }
       const data = await res.json();
 
@@ -308,21 +432,50 @@ export default function ChatbotPage() {
     setEditValue(Array.isArray(val) ? val.join(", ") : String(val));
   };
 
-  const saveEdit = () => {
-    if (!editingKey) return;
-    const updated = { ...answers, [editingKey]: editValue };
-    setAnswers(updated);
-    setEditingKey(null);
+  // Saves a single edited answer to the server (arrays stay arrays)
+  const saveEdit = async () => {
+    if (!editingKey || savingEdit) return;
+    const key = editingKey;
+    const value = Array.isArray(answers[key])
+      ? editValue.split(",").map((v) => v.trim()).filter(Boolean)
+      : editValue.trim();
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/public/projects/${token}/answers`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: { [key]: value } }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setAnswers(data.answers || { ...answers, [key]: value });
+      setEditingKey(null);
+    } catch {
+      showNotice("Impossible d'enregistrer la modification. Réessayez.");
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const confirmReview = async () => {
-    const res = await fetch(`/api/public/chat/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userMessage: "__confirm__" }),
-    });
+    if (confirming) return;
+    if (editingKey) await saveEdit();
+    setConfirming(true);
+    let res: Response;
+    try {
+      res = await fetch(`/api/public/chat/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userMessage: "__confirm__" }),
+      });
+    } catch {
+      setConfirming(false);
+      showNotice("Erreur de connexion. Réessayez.");
+      return;
+    }
+    setConfirming(false);
     if (!res.ok) {
-      setError("Erreur lors de la confirmation.");
+      showNotice("Erreur lors de la confirmation. Réessayez.");
       return;
     }
     const data = await res.json();
@@ -415,8 +568,8 @@ export default function ChatbotPage() {
         },
       );
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message);
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Erreur. Réessayez.");
       }
       const data = await res.json();
       if (Array.isArray(data.scenarios)) setScenarios(data.scenarios);
@@ -479,14 +632,32 @@ export default function ChatbotPage() {
     setStepInput("");
   };
 
+  // POST helper for scenario actions: returns parsed JSON or null (and shows a notice)
+  const postAction = async (url: string, body?: unknown) => {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showNotice(data.message || "Erreur. Réessayez.");
+        return null;
+      }
+      return data;
+    } catch {
+      showNotice("Erreur de connexion. Réessayez.");
+      return null;
+    }
+  };
+
   const addStep = async () => {
     if (activeScenario === null || stepSending) return;
-    const res = await fetch(
+    const data = await postAction(
       `/api/public/chat/${token}/scenario/${activeScenario}/step/add`,
-      { method: "POST" },
     );
-    if (!res.ok) return;
-    const data = await res.json();
+    if (!data) return;
     setScenarios(data.scenarios);
     setScenarioDone((prev) => ({ ...prev, [activeScenario]: false }));
     setActiveStep(data.stepIndex);
@@ -498,12 +669,10 @@ export default function ChatbotPage() {
     if (activeScenario === null) return;
     if (!window.confirm("Supprimer cette étape ? Cette action est irréversible."))
       return;
-    const res = await fetch(
+    const data = await postAction(
       `/api/public/chat/${token}/scenario/${activeScenario}/step/${stpIdx}/delete`,
-      { method: "POST" },
     );
-    if (!res.ok) return;
-    const data = await res.json();
+    if (!data) return;
     setScenarios(data.scenarios);
     setScenarioDone((prev) => ({ ...prev, [activeScenario]: false }));
     const stepsAfter = data.scenarios[activeScenario]?.answers?.steps || [];
@@ -520,12 +689,10 @@ export default function ChatbotPage() {
 
   const finishScenario = async () => {
     if (activeScenario === null) return;
-    const res = await fetch(
+    const data = await postAction(
       `/api/public/chat/${token}/scenario/${activeScenario}/finalize`,
-      { method: "POST" },
     );
-    if (!res.ok) return;
-    const data = await res.json();
+    if (!data) return;
     if (Array.isArray(data.scenarios)) setScenarios(data.scenarios);
     setScenarioDone((prev) => ({ ...prev, [activeScenario]: true }));
   };
@@ -535,13 +702,10 @@ export default function ChatbotPage() {
     if (!addName.trim() || addingScenario) return;
     setAddingScenario(true);
     try {
-      const res = await fetch(`/api/public/chat/${token}/scenario/add`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: addName.trim() }),
+      const data = await postAction(`/api/public/chat/${token}/scenario/add`, {
+        name: addName.trim(),
       });
-      if (!res.ok) return;
-      const data = await res.json();
+      if (!data) return;
       setScenarios(data.scenarios);
       setAddName("");
       setShowAddModal(false);
@@ -562,16 +726,11 @@ export default function ChatbotPage() {
     if (renameTarget === null || !renameName.trim() || renamingScenario) return;
     setRenamingScenario(true);
     try {
-      const res = await fetch(
+      const data = await postAction(
         `/api/public/chat/${token}/scenario/rename/${renameTarget}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: renameName.trim() }),
-        },
+        { name: renameName.trim() },
       );
-      if (!res.ok) return;
-      const data = await res.json();
+      if (!data) return;
       setScenarios(data.scenarios);
       setRenameTarget(null);
       setRenameName("");
@@ -582,14 +741,10 @@ export default function ChatbotPage() {
 
   const deleteScenario = async (sIdx: number) => {
     if (!window.confirm("Supprimer ce scénario ? Cette action est irréversible.")) return;
-    const res = await fetch(
+    const data = await postAction(
       `/api/public/chat/${token}/scenario/delete/${sIdx}`,
-      {
-        method: "POST",
-      },
     );
-    if (!res.ok) return;
-    const data = await res.json();
+    if (!data) return;
     setScenarios(data.scenarios);
     setStepMessages({});
     setStepComplete({});
@@ -615,12 +770,16 @@ export default function ChatbotPage() {
   };
 
   const finishProject = async () => {
-    await fetch(`/api/public/chat/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userMessage: "__scenario_done__" }),
+    if (
+      !window.confirm(
+        "Terminer le projet ? Vous ne pourrez plus modifier vos réponses.",
+      )
+    )
+      return;
+    const data = await postAction(`/api/public/chat/${token}`, {
+      userMessage: "__scenario_done__",
     });
-    setPhase("completed");
+    if (data) setPhase("completed");
   };
 
   const backToReview = async () => {
@@ -630,10 +789,40 @@ export default function ChatbotPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userMessage: "__back_to_review__" }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        showNotice("Erreur. Réessayez.");
+        return;
+      }
       const data = await res.json();
       setPhase("review");
       setAnswers(data.answers || {});
+    } catch {
+      showNotice("Erreur de connexion. Réessayez.");
+    }
+  };
+
+  const resetScenarios = async () => {
+    if (
+      !window.confirm(
+        "Réinitialiser les scénarios ? Vos réponses des informations générales seront conservées.",
+      )
+    )
+      return;
+    try {
+      const res = await fetch(`/api/public/chat/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userMessage: "__reset_scenarios__" }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setScenarios(data.scenarios || []);
+      setStepMessages({});
+      setStepComplete({});
+      setScenarioDone({});
+      setActiveStep(null);
+      setActiveScenario(null);
+      setStepInput("");
     } catch {
       /* ignore */
     }
@@ -698,10 +887,12 @@ export default function ChatbotPage() {
     label: string | null,
     step: number,
     total: number,
+    showHeader = true,
   ) => {
     const progressPct = total > 0 ? Math.min((step / total) * 100, 100) : 0;
     return (
       <>
+        {showHeader && (
         <header className={styles.chatHeader}>
           <div className={styles.headerLeft}>
             <img
@@ -710,7 +901,7 @@ export default function ChatbotPage() {
               className={styles.headerLogo}
             />
             <div>
-              <div className={styles.headerTitle}>Tadreex Creator</div>
+              <div className={styles.headerTitle}>Scenarios Platform</div>
               <div className={styles.headerSubtitle}>
                 Assistant de conception VR
               </div>
@@ -737,23 +928,22 @@ export default function ChatbotPage() {
               onClick={resetChat}
               title="Réinitialiser le chat"
             >
-              ↻ Réinitialiser
+              <Icon name="refresh" size={14} /> Réinitialiser
             </button>
           </div>
         </header>
+        )}
 
-        <main className={styles.messageList}>
+        <main className={styles.messageList} aria-live="polite">
           {messages.map((msg, idx) => (
             <div
               key={idx}
               className={`${styles.messageRow} ${msg.role === "user" ? styles.userRow : styles.botRow}`}
             >
               {msg.role === "bot" && (
-                <img
-                  src="/chatbot-icon.png"
-                  alt="Bot"
-                  className={styles.avatar}
-                />
+                <span className={styles.avatar} aria-hidden="true">
+                  <Icon name="sparkles" size={15} />
+                </span>
               )}
               <div
                 className={`${styles.bubble} ${msg.role === "user" ? styles.userBubble : styles.botBubble}`}
@@ -768,34 +958,23 @@ export default function ChatbotPage() {
                       disabled={sending || inputDisabled}
                       onValidate={(t) => send(t)}
                     />
-                  ) : msg.options ? (
-                    <div className={styles.optionButtons}>
-                      {msg.options.map((opt) => (
-                        <button
-                          key={opt}
-                          className={styles.optionBtn}
-                          onClick={() => send(opt)}
-                          disabled={sending}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
+                  ) : msg.options && msg.options.length > 0 ? (
+                    <OptionPicker
+                      options={msg.options}
+                      multiple={!inputDisabled}
+                      disabled={sending}
+                      onValidate={(t) => send(t)}
+                    />
                   ) : null
                 )}
               </div>
-              {msg.role === "user" && (
-                <img src="/user.png" alt="User" className={styles.userAvatar} />
-              )}
             </div>
           ))}
           {sending && (
             <div className={`${styles.messageRow} ${styles.botRow}`}>
-              <img
-                src="/chatbot-icon.png"
-                alt="Bot"
-                className={styles.avatar}
-              />
+              <span className={styles.avatar} aria-hidden="true">
+                <Icon name="sparkles" size={15} />
+              </span>
               <div
                 className={`${styles.bubble} ${styles.botBubble} ${styles.typingBubble}`}
               >
@@ -815,7 +994,7 @@ export default function ChatbotPage() {
             disabled={sending}
             title="Aide"
           >
-            <img src="/help.png" alt="Aide" className={styles.helpIcon} /> Aide
+            <Icon name="bulb" size={16} className={styles.helpIcon} /> Aide
           </button>
           <textarea
             className={styles.textInput}
@@ -834,18 +1013,66 @@ export default function ChatbotPage() {
             }
             disabled={inputDisabled}
             rows={1}
+            aria-label="Votre réponse"
           />
           <button
             className={styles.sendBtn}
             onClick={() => send(input)}
             disabled={!input.trim() || sending || inputDisabled}
+            aria-label="Envoyer"
           >
-            ➤
+            <Icon name="send" size={17} />
           </button>
         </footer>
       </>
     );
   };
+
+  const noticeBanner = notice ? (
+    <div className={styles.noticeBanner} role="alert">
+      {notice}
+    </div>
+  ) : null;
+
+  // ─── Loading / Error ────────────────────────────────────────
+
+  if (phase === "loading") {
+    return (
+      <div className={styles.fullPage}>
+        <div className={styles.loadingBox}>
+          <img src="/tadreex.png" alt="" className={styles.loadingLogo} />
+          <div className={styles.loadingDots}>
+            <span className={styles.dot} />
+            <span className={styles.dot} />
+            <span className={styles.dot} />
+          </div>
+          <p>Chargement de votre projet…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "error") {
+    return (
+      <div className={styles.fullPage}>
+        <div className={styles.completedBox}>
+          <span className={`${styles.completedIcon} ${styles.errorIcon}`}>!</span>
+          <h2>Oups…</h2>
+          <p className={styles.errorText}>{error || "Une erreur est survenue."}</p>
+          <button
+            className={styles.confirmBtn}
+            onClick={() => {
+              setError("");
+              setPhase("loading");
+              initProject();
+            }}
+          >
+            Réessayer
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ─── Completed ──────────────────────────────────────────────
 
@@ -856,7 +1083,7 @@ export default function ChatbotPage() {
           <span className={styles.completedIcon}>✓</span>
           <h2>Projet terminé !</h2>
           <p>
-            Merci d&apos;avoir utilisé Tadreex Creator. Les informations sont
+            Merci d&apos;avoir utilisé Scenarios Platform. Les informations sont
             enregistrées.
           </p>
           {error && <p className={styles.errorText}>{error}</p>}
@@ -878,7 +1105,7 @@ export default function ChatbotPage() {
               className={styles.headerLogo}
             />
             <div>
-              <div className={styles.headerTitle}>Tadreex Creator</div>
+              <div className={styles.headerTitle}>Scenarios Platform</div>
               <div className={styles.headerSubtitle}>
                 Récapitulatif des informations
               </div>
@@ -894,7 +1121,7 @@ export default function ChatbotPage() {
               onClick={resetChat}
               title="Réinitialiser le chat"
             >
-              ↻ Réinitialiser
+              <Icon name="refresh" size={14} /> Réinitialiser
             </button>
           </div>
         </header>
@@ -927,7 +1154,10 @@ export default function ChatbotPage() {
                           onChange={(e) => setEditValue(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") saveEdit();
+                            if (e.key === "Escape") setEditingKey(null);
                           }}
+                          disabled={savingEdit}
+                          aria-label={`Modifier ${key}`}
                           autoFocus
                         />
                       ) : Array.isArray(val) ? (
@@ -941,6 +1171,8 @@ export default function ChatbotPage() {
                         <button
                           className={styles.reviewSaveBtn}
                           onClick={saveEdit}
+                          disabled={savingEdit}
+                          aria-label="Enregistrer"
                         >
                           ✓
                         </button>
@@ -948,8 +1180,9 @@ export default function ChatbotPage() {
                         <button
                           className={styles.reviewEditBtn}
                           onClick={() => startEdit(key, val)}
+                          aria-label={`Modifier ${key}`}
                         >
-                          ✎
+                          <Icon name="edit" size={14} />
                         </button>
                       )}
                     </td>
@@ -958,10 +1191,15 @@ export default function ChatbotPage() {
             </tbody>
           </table>
 
-          <button className={styles.confirmBtn} onClick={confirmReview}>
-            Confirmer & Continuer →
+          <button
+            className={styles.confirmBtn}
+            onClick={confirmReview}
+            disabled={confirming || savingEdit}
+          >
+            {confirming ? "Confirmation…" : "Confirmer & Continuer →"}
           </button>
         </main>
+        {noticeBanner}
       </div>
     );
   }
@@ -998,7 +1236,7 @@ export default function ChatbotPage() {
               className={styles.headerLogo}
             />
             <div>
-              <div className={styles.headerTitle}>Tadreex Creator</div>
+              <div className={styles.headerTitle}>Scenarios Platform</div>
               <div className={styles.headerSubtitle}>
                 Construction des scénarios
               </div>
@@ -1014,14 +1252,14 @@ export default function ChatbotPage() {
                 onClick={backToReview}
                 title="Retour aux réponses des questions générales"
               >
-                ← Réponses
+                <Icon name="arrowLeft" size={14} /> Réponses
               </button>
               <button
                 className={styles.resetBtn}
-                onClick={resetChat}
-                title="Réinitialiser le chat"
+                onClick={resetScenarios}
+                title="Réinitialiser uniquement les scénarios (conserve les infos générales)"
               >
-                ↻ Réinitialiser
+                <Icon name="refresh" size={14} /> Réinitialiser
               </button>
             </div>
           </div>
@@ -1051,7 +1289,7 @@ export default function ChatbotPage() {
                         setRenameName(sc.name);
                       }}
                     >
-                      ✎
+                      <Icon name="edit" size={14} />
                     </button>
                     <button
                       className={`${styles.scenarioIconBtn} ${styles.scenarioIconDanger}`}
@@ -1061,7 +1299,7 @@ export default function ChatbotPage() {
                         deleteScenario(i);
                       }}
                     >
-                      🗑
+                      <Icon name="trash" size={14} />
                     </button>
                   </div>
                 </div>
@@ -1108,14 +1346,14 @@ export default function ChatbotPage() {
                       setRenameName(sc.name || "");
                     }}
                   >
-                    ✎
+                    <Icon name="edit" size={14} />
                   </button>
                   <button
                     className={styles.scenarioDeleteBtn}
                     title="Supprimer le scénario"
                     onClick={() => deleteScenario(activeScenario!)}
                   >
-                    🗑
+                    <Icon name="trash" size={14} />
                   </button>
                 </div>
               )}
@@ -1233,6 +1471,7 @@ export default function ChatbotPage() {
                     null,
                     0,
                     0,
+                    false,
                   )
                 )}
               </>
@@ -1320,6 +1559,7 @@ export default function ChatbotPage() {
             </div>
           </div>
         )}
+        {noticeBanner}
       </div>
     );
   }
@@ -1339,6 +1579,7 @@ export default function ChatbotPage() {
         infoStep,
         totalInfoFields,
       )}
+      {noticeBanner}
     </div>
   );
 }

@@ -3,18 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import { adminFetch, errorMessage } from '@/lib/api';
+import { useToast } from '@/components/useToast';
 import styles from './project-detail.module.css';
-
-interface Etape {
-  description?: string;
-  suggestions?: string;
-  ajustements?: string;
-}
-
-interface Scene {
-  nom?: string;
-  etapes: Etape[];
-}
 
 interface StepRow {
   numero?: string;
@@ -44,7 +35,9 @@ interface Project {
   scenarios: ScenarioBlock[];
 }
 
-const EMPTY = <span className={styles.emptyValue}>—</span>;
+const LINE_BREAK = String.fromCharCode(10);
+
+const EMPTY =<span className={styles.emptyValue}>—</span>;
 
 const SCENARIO_COLUMNS: Array<{ key: keyof StepRow; label: string }> = [
   { key: "numero", label: "N°" },
@@ -94,7 +87,6 @@ function StepTable({ steps }: { steps: StepRow[] }) {
 }
 
 function PreviewPanel({ answers, scenarios }: { answers: Record<string, any>; scenarios: ScenarioBlock[] }) {
-  const scenes = (answers.scenes || []) as Scene[];
   const fieldKeys = Object.keys(answers).filter((k) => k !== 'scenes');
 
   return (
@@ -118,50 +110,6 @@ function PreviewPanel({ answers, scenarios }: { answers: Record<string, any>; sc
               </div>
             ))}
           </dl>
-        )}
-      </div>
-
-      <div className={styles.card}>
-        <h2>
-          Scénario ({scenes.length} scène{scenes.length !== 1 ? 's' : ''})
-        </h2>
-
-        {scenes.length === 0 ? (
-          <p className={styles.muted}>Aucune scène définie pour l&apos;instant.</p>
-        ) : (
-          scenes.map((scene, si) => (
-            <div key={si} className={styles.sceneBlock}>
-              <h3 className={styles.sceneTitle}>
-                <span className={styles.sceneNum}>{si + 1}</span>
-                {scene.nom || <em className={styles.muted}>Scène sans nom</em>}
-              </h3>
-
-              {!scene.etapes || scene.etapes.length === 0 ? (
-                <p className={styles.muted}>Aucune étape dans cette scène.</p>
-              ) : (
-                <table className={styles.etapeTable}>
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Description</th>
-                      <th>Suggestions</th>
-                      <th>Ajustements IA</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {scene.etapes.map((etape, ei) => (
-                      <tr key={ei}>
-                        <td className={styles.etapeNum}>{ei + 1}</td>
-                        <td>{etape.description || EMPTY}</td>
-                        <td>{etape.suggestions || EMPTY}</td>
-                        <td>{etape.ajustements || EMPTY}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          ))
         )}
       </div>
 
@@ -220,12 +168,16 @@ export default function ProjectDetailPage() {
 
   const [status, setStatus] = useState('');
   const [answers, setAnswers] = useState<Record<string, any>>({ scenes: [] });
+  const [dirty, setDirty] = useState(false);
+  // Raw textarea text for multi-choice (array) answers, split into items on save
+  const [listDrafts, setListDrafts] = useState<Record<string, string>>({});
+  const { toast, Toast } = useToast();
 
   useEffect(() => {
     if (!id) return;
     const fetchProject = async () => {
       try {
-        const res = await fetch(`/api/admin/projects/${id}`);
+        const res = await adminFetch(`/api/admin/projects/${id}`);
         if (res.ok) {
           const data = await res.json();
           setProject(data);
@@ -245,22 +197,52 @@ export default function ProjectDetailPage() {
 
   const handleSave = async () => {
     setSaving(true);
+    const merged = { ...answers };
+    for (const [key, text] of Object.entries(listDrafts)) {
+      merged[key] = text.split(/\r?\n/).map((v) => v.trim()).filter(Boolean);
+    }
     try {
-      const res = await fetch(`/api/admin/projects/${id}/answers`, {
+      const res = await adminFetch(`/api/admin/projects/${id}/answers`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, answers }),
+        body: JSON.stringify({ status, answers: merged }),
       });
-      if (res.ok) alert('Project saved successfully!');
-    } catch (error) {
-      console.error('Error saving project:', error);
+      if (res.ok) {
+        const data = await res.json();
+        setProject(data);
+        setAnswers(data.answers || merged);
+        setListDrafts({});
+        setDirty(false);
+        toast('Project saved');
+      } else {
+        toast(await errorMessage(res, 'Save failed'), 'error');
+      }
+    } catch {
+      toast('Cannot reach the server.', 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleFieldChange = (key: string, value: string) =>
-    setAnswers((prev) => ({ ...prev, [key]: value }));
+  // Multi-choice answers are stored as arrays: edit them one item per line
+  const handleFieldChange = (key: string, value: string) => {
+    setDirty(true);
+    if (Array.isArray(answers[key])) {
+      setListDrafts((prev) => ({ ...prev, [key]: value }));
+    } else {
+      setAnswers((prev) => ({ ...prev, [key]: value }));
+    }
+  };
+
+  const copyLink = async () => {
+    if (!project) return;
+    const link = `${window.location.origin}/chat/${project.clientToken}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast('Client link copied');
+    } catch {
+      window.prompt('Copy the client link:', link);
+    }
+  };
 
   if (loading) return <div className={styles.loading}>Loading project…</div>;
   if (!project) return <div className={styles.loading}>Project not found.</div>;
@@ -276,13 +258,20 @@ export default function ProjectDetailPage() {
           </Link>
           <h1 className={styles.title}>{project.title}</h1>
           <p className={styles.tokenText}>
-            Client link: <code>/chat/{project.clientToken}</code>
+            Client link:{' '}
+            <a href={`/chat/${project.clientToken}`} target="_blank" rel="noreferrer">
+              <code>/chat/{project.clientToken}</code>
+            </a>{' '}
+            <button type="button" className={styles.copyInline} onClick={copyLink}>
+              Copy
+            </button>
           </p>
         </div>
         <div className={styles.actions}>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(e) => { setStatus(e.target.value); setDirty(true); }}
+            aria-label="Project status"
             className={styles.statusSelect}
           >
             <option value="draft">Draft</option>
@@ -290,7 +279,7 @@ export default function ProjectDetailPage() {
             <option value="completed">Completed</option>
           </select>
           <button onClick={handleSave} className={styles.saveBtn} disabled={saving}>
-            {saving ? 'Saving…' : 'Save Changes'}
+            {saving ? 'Saving…' : dirty ? 'Save Changes •' : 'Save Changes'}
           </button>
         </div>
       </div>
@@ -322,10 +311,20 @@ export default function ProjectDetailPage() {
               <div className={styles.formGrid}>
                 {fieldKeys.map((key) => (
                   <div key={key} className={`${styles.formGroup} ${styles.fullWidth}`}>
-                    <label>{key}</label>
-                    <input
-                      type="text"
-                      value={answers[key] || ''}
+                    <label htmlFor={`f-${key}`}>
+                      {key}
+                      {Array.isArray(answers[key]) && (
+                        <span className={styles.muted}> — one item per line</span>
+                      )}
+                    </label>
+                    <textarea
+                      id={`f-${key}`}
+                      rows={Array.isArray(answers[key]) ? Math.max(2, answers[key].length) : 2}
+                      value={
+                        Array.isArray(answers[key])
+                          ? listDrafts[key] ?? answers[key].join(LINE_BREAK)
+                          : answers[key] ?? ''
+                      }
                       onChange={(e) => handleFieldChange(key, e.target.value)}
                     />
                   </div>
@@ -343,6 +342,7 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       )}
+      <Toast />
     </div>
   );
 }

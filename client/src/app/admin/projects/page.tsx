@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { adminFetch, errorMessage } from '@/lib/api';
+import { useToast } from '@/components/useToast';
+import { Icon } from '@/components/Icon';
 import styles from './projects.module.css';
 
 interface Project {
@@ -12,9 +15,19 @@ interface Project {
   createdAt: string;
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  draft: 'Draft',
+  in_progress: 'In progress',
+  completed: 'Completed',
+};
+
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const { toast, Toast } = useToast();
 
   // Create
   const [showCreate, setShowCreate] = useState(false);
@@ -32,27 +45,65 @@ export default function ProjectsPage() {
 
   useEffect(() => { fetchProjects(); }, []);
 
+  // Close any open modal with Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setShowCreate(false);
+      setRenameTarget(null);
+      setDeleteTarget(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const fetchProjects = async () => {
     try {
-      const res = await fetch('/api/admin/projects');
-      if (res.ok) setProjects(await res.json());
-    } catch (e) { console.error('Failed to fetch projects', e); }
-    finally { setLoading(false); }
+      const res = await adminFetch('/api/admin/projects');
+      if (res.ok) {
+        setProjects(await res.json());
+        setLoadError('');
+      } else {
+        setLoadError(await errorMessage(res, 'Failed to load projects'));
+      }
+    } catch {
+      setLoadError('Cannot reach the server.');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return projects.filter(
+      (p) =>
+        (statusFilter === 'all' || p.status === statusFilter) &&
+        (!q || p.title.toLowerCase().includes(q)),
+    );
+  }, [projects, query, statusFilter]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
     setCreating(true);
     try {
-      const res = await fetch('/api/admin/projects', {
+      const res = await adminFetch('/api/admin/projects', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: newTitle }),
+        body: JSON.stringify({ title: newTitle.trim() }),
       });
-      if (res.ok) { setNewTitle(''); setShowCreate(false); fetchProjects(); }
-    } catch (e) { console.error('Failed to create project', e); }
-    finally { setCreating(false); }
+      if (res.ok) {
+        setNewTitle('');
+        setShowCreate(false);
+        toast('Project created');
+        fetchProjects();
+      } else {
+        toast(await errorMessage(res, 'Create failed'), 'error');
+      }
+    } catch {
+      toast('Cannot reach the server.', 'error');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handleRename = async (e: React.FormEvent) => {
@@ -60,30 +111,51 @@ export default function ProjectsPage() {
     if (!renameTarget || !renameTitle.trim()) return;
     setRenaming(true);
     try {
-      const res = await fetch(`/api/admin/projects/${renameTarget._id}`, {
+      const res = await adminFetch(`/api/admin/projects/${renameTarget._id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: renameTitle }),
+        body: JSON.stringify({ title: renameTitle.trim() }),
       });
-      if (res.ok) { setRenameTarget(null); fetchProjects(); }
-    } catch (e) { console.error('Failed to rename project', e); }
-    finally { setRenaming(false); }
+      if (res.ok) {
+        setRenameTarget(null);
+        toast('Project renamed');
+        fetchProjects();
+      } else {
+        toast(await errorMessage(res, 'Rename failed'), 'error');
+      }
+    } catch {
+      toast('Cannot reach the server.', 'error');
+    } finally {
+      setRenaming(false);
+    }
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/admin/projects/${deleteTarget._id}`, { method: 'DELETE' });
-      if (res.ok) { setDeleteTarget(null); fetchProjects(); }
-    } catch (e) { console.error('Failed to delete project', e); }
-    finally { setDeleting(false); }
+      const res = await adminFetch(`/api/admin/projects/${deleteTarget._id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setDeleteTarget(null);
+        toast('Project deleted');
+        fetchProjects();
+      } else {
+        toast(await errorMessage(res, 'Delete failed'), 'error');
+      }
+    } catch {
+      toast('Cannot reach the server.', 'error');
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const copyLink = (token: string) => {
+  const copyLink = async (token: string) => {
     const link = `${window.location.origin}/chat/${token}`;
-    navigator.clipboard.writeText(link);
-    alert('Client link copied to clipboard!');
+    try {
+      await navigator.clipboard.writeText(link);
+      toast('Client link copied to clipboard');
+    } catch {
+      window.prompt('Copy the client link:', link);
+    }
   };
 
   return (
@@ -91,15 +163,51 @@ export default function ProjectsPage() {
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>Projects</h1>
-          <p className={styles.subtitle}>Manage all client projects</p>
+          <p className={styles.subtitle}>Each project has a private link you share with the client.</p>
         </div>
         <button className={styles.createBtn} onClick={() => setShowCreate(true)}>
-          + New Project
+          <Icon name="plus" size={16} /> New project
         </button>
       </div>
 
+      {!loading && projects.length > 0 && (
+        <div className={styles.toolbar}>
+          <label className={styles.searchBox}>
+          <Icon name="search" size={16} />
+          <input
+            type="search"
+            className={styles.searchInput}
+            placeholder="Search projects…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search projects"
+          />
+          </label>
+          <div className={styles.filterGroup} role="tablist" aria-label="Filter by status">
+            {['all', 'draft', 'in_progress', 'completed'].map((s) => (
+              <button
+                key={s}
+                role="tab"
+                aria-selected={statusFilter === s}
+                className={`${styles.filterBtn} ${statusFilter === s ? styles.filterBtnActive : ''}`}
+                onClick={() => setStatusFilter(s)}
+              >
+                {s === 'all' ? `All (${projects.length})` : STATUS_LABEL[s]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className={styles.loading}>Loading projects...</div>
+      ) : loadError ? (
+        <div className={styles.errorBox}>
+          {loadError}
+          <button className={styles.actionBtn} onClick={() => { setLoading(true); fetchProjects(); }}>
+            Retry
+          </button>
+        </div>
       ) : (
         <div className={styles.tableWrapper}>
           <table className={styles.table}>
@@ -107,34 +215,52 @@ export default function ProjectsPage() {
               <tr>
                 <th>Title</th>
                 <th>Status</th>
-                <th>Created At</th>
-                <th className={styles.actionsCol}>Actions</th>
+                <th className={styles.dateCol}>Created</th>
+                <th className={styles.actionsCol}><span className={styles.srOnly}>Actions</span></th>
               </tr>
             </thead>
             <tbody>
-              {projects.map((project) => (
+              {filtered.map((project) => (
                 <tr key={project._id}>
-                  <td>
+                  <td data-label="Title">
                     <Link href={`/admin/projects/${project._id}`} className={styles.projectLink}>
                       {project.title}
                     </Link>
                   </td>
-                  <td>
-                    <span className={`${styles.badge} ${styles[project.status]}`}>
-                      {project.status.replace('_', ' ')}
+                  <td data-label="Status">
+                    <span className={`${styles.badge} ${styles[project.status] || ''}`}>
+                      {STATUS_LABEL[project.status] || project.status}
                     </span>
                   </td>
-                  <td>{new Date(project.createdAt).toLocaleDateString()}</td>
+                  <td className={styles.dateCol} data-label="Created">
+                    {new Date(project.createdAt).toLocaleDateString()}
+                  </td>
                   <td className={styles.actionsCol}>
-                    <button onClick={() => copyLink(project.clientToken)} className={styles.copyBtn} title="Copy Client Link">🔗 Copy Link</button>
-                    <button onClick={() => { setRenameTarget(project); setRenameTitle(project.title); }} className={styles.actionBtn}>✎ Rename</button>
-                    <button onClick={() => setDeleteTarget(project)} className={`${styles.actionBtn} ${styles.dangerBtn}`}>🗑 Delete</button>
-                    <Link href={`/admin/projects/${project._id}`} className={styles.editBtn}>Edit →</Link>
+                    <div className={styles.rowActions}>
+                      <button onClick={() => copyLink(project.clientToken)} className={styles.copyBtn} title="Copy client link">
+                        <Icon name="link" size={15} /> <span>Copy link</span>
+                      </button>
+                      <a href={`/chat/${project.clientToken}`} target="_blank" rel="noreferrer" className={styles.iconBtn} title="Open client chat" aria-label="Open client chat">
+                        <Icon name="external" size={15} />
+                      </a>
+                      <button onClick={() => { setRenameTarget(project); setRenameTitle(project.title); }} className={styles.iconBtn} title="Rename" aria-label="Rename">
+                        <Icon name="edit" size={15} />
+                      </button>
+                      <button onClick={() => setDeleteTarget(project)} className={`${styles.iconBtn} ${styles.dangerBtn}`} title="Delete" aria-label="Delete">
+                        <Icon name="trash" size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
-              {projects.length === 0 && (
-                <tr><td colSpan={4} className={styles.emptyState}>No projects found. Create one to get started!</td></tr>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={4} className={styles.emptyState}>
+                    {projects.length === 0
+                      ? 'No projects yet. Create one to get started!'
+                      : 'No projects match your search.'}
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
@@ -144,12 +270,12 @@ export default function ProjectsPage() {
       {/* Create Modal */}
       {showCreate && (
         <div className={styles.modalOverlay} onClick={() => setShowCreate(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <h2>Create New Project</h2>
+          <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="create-title" onClick={(e) => e.stopPropagation()}>
+            <h2 id="create-title">Create New Project</h2>
             <form onSubmit={handleCreate}>
               <div className={styles.formGroup}>
-                <label>Project Title</label>
-                <input type="text" required autoFocus placeholder="e.g. Acme Corp Onboarding" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} disabled={creating} />
+                <label htmlFor="new-title">Project Title</label>
+                <input id="new-title" type="text" required autoFocus placeholder="e.g. Acme Corp Onboarding" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} disabled={creating} />
               </div>
               <div className={styles.modalActions}>
                 <button type="button" onClick={() => setShowCreate(false)} className={styles.cancelBtn}>Cancel</button>
@@ -163,12 +289,12 @@ export default function ProjectsPage() {
       {/* Rename Modal */}
       {renameTarget && (
         <div className={styles.modalOverlay} onClick={() => setRenameTarget(null)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <h2>Rename Project</h2>
+          <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="rename-title" onClick={(e) => e.stopPropagation()}>
+            <h2 id="rename-title">Rename Project</h2>
             <form onSubmit={handleRename}>
               <div className={styles.formGroup}>
-                <label>Project Title</label>
-                <input type="text" required autoFocus value={renameTitle} onChange={(e) => setRenameTitle(e.target.value)} disabled={renaming} />
+                <label htmlFor="rename-input">Project Title</label>
+                <input id="rename-input" type="text" required autoFocus value={renameTitle} onChange={(e) => setRenameTitle(e.target.value)} disabled={renaming} />
               </div>
               <div className={styles.modalActions}>
                 <button type="button" onClick={() => setRenameTarget(null)} className={styles.cancelBtn}>Cancel</button>
@@ -182,9 +308,9 @@ export default function ProjectsPage() {
       {/* Delete Confirmation */}
       {deleteTarget && (
         <div className={styles.modalOverlay} onClick={() => setDeleteTarget(null)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <h2>Delete Project</h2>
-            <p style={{ marginBottom: '1.5rem', color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+          <div className={styles.modal} role="alertdialog" aria-modal="true" aria-labelledby="delete-title" onClick={(e) => e.stopPropagation()}>
+            <h2 id="delete-title">Delete Project</h2>
+            <p className={styles.modalText}>
               Are you sure you want to delete <strong>{deleteTarget.title}</strong>? This action is irreversible.
             </p>
             <div className={styles.modalActions}>
@@ -194,6 +320,8 @@ export default function ProjectsPage() {
           </div>
         </div>
       )}
+
+      <Toast />
     </div>
   );
 }

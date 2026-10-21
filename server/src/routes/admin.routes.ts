@@ -5,8 +5,10 @@ import {
   setModelSettings,
 } from "../controllers/settings.controller";
 import { protect, adminOnly } from "../middleware/auth";
+import { validateId } from "../middleware/validateId";
 
 const router = Router();
+router.param("id", validateId);
 
 // All admin routes require authentication AND admin role
 router.use(protect, adminOnly);

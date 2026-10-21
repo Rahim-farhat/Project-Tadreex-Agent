@@ -7,8 +7,10 @@ import {
   deleteProject,
   updateProjectAnswers,
 } from '../controllers/project.controller';
+import { validateId } from '../middleware/validateId';
 
 const router = Router();
+router.param('id', validateId);
 
 router.get('/', getProjects);
 router.post('/', createProject);

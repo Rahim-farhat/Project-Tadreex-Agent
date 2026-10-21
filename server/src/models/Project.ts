@@ -1,7 +1,10 @@
-import mongoose, { Document, Schema } from 'mongoose';
-import { customAlphabet } from 'nanoid';
+import { randomInt, randomUUID } from 'crypto';
+import { query } from '../config/db';
 
-const generateToken = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', 10);
+const TOKEN_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+const generateToken = (length = 10): string =>
+  Array.from({ length }, () => TOKEN_ALPHABET[randomInt(TOKEN_ALPHABET.length)]).join('');
 
 export interface IEtape {
   description?: string;
@@ -49,6 +52,7 @@ export interface IScenarioBuilder {
 
 // A scenario block within the project (Phase 2)
 export interface IScenarioBlock {
+  _id: string;
   name: string;
   currentField: number;
   chatHistory: IChatTurn[];
@@ -56,55 +60,83 @@ export interface IScenarioBlock {
   builder: IScenarioBuilder;
 }
 
-export interface IProject extends Document {
+export type ProjectStatus = 'draft' | 'in_progress' | 'completed';
+export type ProjectPhase = 'info' | 'review' | 'scenario' | 'completed';
+
+// A project is loaded as a plain object, mutated by the controllers, then
+// written back in full with saveProject().
+export interface IProject {
+  _id: string;
   title: string;
-  status: 'draft' | 'in_progress' | 'completed';
+  status: ProjectStatus;
   clientToken: string;
-  createdBy?: mongoose.Types.ObjectId;
-  phase: 'info' | 'review' | 'scenario' | 'completed';
+  createdBy?: string | null;
+  phase: ProjectPhase;
   currentStep: number;
   infoChatHistory: IChatTurn[];
   answers: IAnswers;
   scenarios: IScenarioBlock[];
   uploadedFiles: string[];
-  sheetUrl?: string;
+  sheetUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const EtapeSchema = new Schema<IEtape>({ description: String, suggestions: String, ajustements: String }, { _id: false });
-const SceneSchema = new Schema<IScene>({ nom: String, etapes: [EtapeSchema] }, { _id: false });
-const ChatTurnSchema = new Schema<IChatTurn>({ role: { type: String, enum: ['user', 'bot'] }, content: String }, { _id: false });
+export const PROJECT_STATUSES: ProjectStatus[] = ['draft', 'in_progress', 'completed'];
 
-const ScenarioBlockSchema = new Schema<IScenarioBlock>(
-  {
-    name: { type: String, default: 'Nouveau scénario' },
-    currentField: { type: Number, default: 0 },
-    chatHistory: { type: [ChatTurnSchema], default: [] },
-    answers: { type: Schema.Types.Mixed, default: () => ({}) },
-    builder: {
-      type: Schema.Types.Mixed,
-      default: () => ({ state: 'collecting', pendingStepIndex: null, pendingFields: null }),
-    },
-  },
-  { _id: true }
-);
+const COLUMNS = `id AS "_id", title, status, client_token AS "clientToken", created_by AS "createdBy",
+  phase, current_step AS "currentStep", info_chat_history AS "infoChatHistory", answers, scenarios,
+  uploaded_files AS "uploadedFiles", sheet_url AS "sheetUrl", created_at AS "createdAt", updated_at AS "updatedAt"`;
 
-const ProjectSchema = new Schema<IProject>(
-  {
-    title: { type: String, required: true, trim: true },
-    status: { type: String, enum: ['draft', 'in_progress', 'completed'], default: 'draft' },
-    clientToken: { type: String, unique: true, default: () => generateToken() },
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
-    phase: { type: String, enum: ['info', 'review', 'scenario', 'completed'], default: 'info' },
-    currentStep: { type: Number, default: 0 },
-    infoChatHistory: { type: [ChatTurnSchema], default: [] },
-    answers: { type: Schema.Types.Mixed, default: () => ({ scenes: [] }) },
-    scenarios: { type: [ScenarioBlockSchema], default: [] },
-    uploadedFiles: { type: [String], default: [] },
-    sheetUrl: { type: String },
-  },
-  { timestamps: true }
-);
+export const newScenarioBlock = (name: string): IScenarioBlock => ({
+  _id: randomUUID(),
+  name,
+  currentField: 0,
+  chatHistory: [],
+  answers: {},
+  builder: { state: 'collecting' },
+});
 
-export default mongoose.model<IProject>('Project', ProjectSchema);
+export const findProjects = (): Promise<IProject[]> =>
+  query<IProject>(`SELECT ${COLUMNS} FROM projects ORDER BY created_at DESC`);
+
+export const findProjectById = async (id: string): Promise<IProject | null> =>
+  (await query<IProject>(`SELECT ${COLUMNS} FROM projects WHERE id = $1`, [id]))[0] ?? null;
+
+export const findProjectByToken = async (token: string): Promise<IProject | null> =>
+  (await query<IProject>(`SELECT ${COLUMNS} FROM projects WHERE client_token = $1`, [token]))[0] ?? null;
+
+export const createProject = async (title: string, createdBy?: string): Promise<IProject> =>
+  (
+    await query<IProject>(
+      `INSERT INTO projects (title, client_token, created_by) VALUES ($1, $2, $3) RETURNING ${COLUMNS}`,
+      [title.trim(), generateToken(), createdBy ?? null],
+    )
+  )[0];
+
+export const deleteProjectById = async (id: string): Promise<boolean> =>
+  (await query(`DELETE FROM projects WHERE id = $1 RETURNING id`, [id])).length > 0;
+
+export const saveProject = async (p: IProject): Promise<IProject> => {
+  const rows = await query<{ updatedAt: Date }>(
+    `UPDATE projects SET
+       title = $2, status = $3, phase = $4, current_step = $5,
+       info_chat_history = $6, answers = $7, scenarios = $8, uploaded_files = $9,
+       sheet_url = $10, updated_at = now()
+     WHERE id = $1 RETURNING updated_at AS "updatedAt"`,
+    [
+      p._id,
+      p.title,
+      p.status,
+      p.phase,
+      p.currentStep,
+      JSON.stringify(p.infoChatHistory ?? []),
+      JSON.stringify(p.answers ?? { scenes: [] }),
+      JSON.stringify(p.scenarios ?? []),
+      JSON.stringify(p.uploadedFiles ?? []),
+      p.sheetUrl ?? null,
+    ],
+  );
+  if (rows[0]) p.updatedAt = rows[0].updatedAt;
+  return p;
+};

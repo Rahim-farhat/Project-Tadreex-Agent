@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import { ChatGroq } from "@langchain/groq";
 import { z } from "zod";
-import Project from "../models/Project";
-import ChatField, { IChatField } from "../models/ChatField";
-import ScenarioField, { IScenarioField } from "../models/ScenarioField";
+import { findProjectByToken, newScenarioBlock, saveProject } from "../models/Project";
+import { findChatFields, IChatField } from "../models/ChatField";
+import { findScenarioFields, IScenarioField } from "../models/ScenarioField";
 
 // ─── LLM Singletons ────────────────────────────────────────────────────────────
 
@@ -119,10 +119,16 @@ let scenarioCache: IScenarioField[] = [];
 let scenarioCacheTime = 0;
 const CACHE_TTL = 30_000;
 
+// Called by the admin field controllers so edits take effect immediately
+export function invalidateFieldCache(): void {
+  infoCacheTime = 0;
+  scenarioCacheTime = 0;
+}
+
 async function getActiveInfoFields(): Promise<IChatField[]> {
   const now = Date.now();
   if (infoCache.length === 0 || now - infoCacheTime > CACHE_TTL) {
-    infoCache = await ChatField.find({ active: true }).sort({ order: 1 });
+    infoCache = await findChatFields(true);
     infoCacheTime = now;
   }
   return infoCache;
@@ -131,7 +137,7 @@ async function getActiveInfoFields(): Promise<IChatField[]> {
 export async function getActiveScenarioFields(): Promise<IScenarioField[]> {
   const now = Date.now();
   if (scenarioCache.length === 0 || now - scenarioCacheTime > CACHE_TTL) {
-    scenarioCache = await ScenarioField.find({ active: true }).sort({ order: 1 });
+    scenarioCache = await findScenarioFields(true);
     scenarioCacheTime = now;
   }
   return scenarioCache;
@@ -371,7 +377,7 @@ async function initInfoPhase(project: any, fields: IChatField[]) {
   const step = project.currentStep;
   if (step >= fields.length) {
     project.phase = "review";
-    await project.save();
+    await saveProject(project);
     return { phase: "review" as const, answers: project.answers };
   }
   const f = fields[step];
@@ -382,7 +388,7 @@ async function initInfoPhase(project: any, fields: IChatField[]) {
   );
   project.infoChatHistory.push({ role: "bot", content: botMsg });
   trimHistory(project.infoChatHistory);
-  await project.save();
+  await saveProject(project);
   return {
     botMessage: botMsg,
     options: getOptionsForField(f),
@@ -390,6 +396,7 @@ async function initInfoPhase(project: any, fields: IChatField[]) {
     phase: "info" as const,
     currentFieldLabel: f.label,
     totalFields: fields.length,
+    nextStep: project.currentStep,
   };
 }
 
@@ -412,7 +419,7 @@ async function handleHelpInfo(project: any, fields: IChatField[]) {
     { role: "bot", content: botMsg },
   );
   trimHistory(project.infoChatHistory);
-  await project.save();
+  await saveProject(project);
   return {
     botMessage: botMsg,
     ...(suggestions.length > 0 ? { suggestions } : {}),
@@ -421,6 +428,7 @@ async function handleHelpInfo(project: any, fields: IChatField[]) {
     phase: "info" as const,
     currentFieldLabel: f.label,
     totalFields: fields.length,
+    nextStep: project.currentStep,
   };
 }
 
@@ -432,7 +440,7 @@ async function processInfoAnswer(
   const step = project.currentStep;
   if (step >= fields.length) {
     project.phase = "review";
-    await project.save();
+    await saveProject(project);
     return { phase: "review" as const, answers: project.answers };
   }
 
@@ -471,7 +479,7 @@ async function processInfoAnswer(
     );
     project.infoChatHistory.push({ role: "bot", content: botMsg });
     trimHistory(project.infoChatHistory);
-    await project.save();
+    await saveProject(project);
     return {
       botMessage: botMsg,
       options: getOptionsForField(f),
@@ -480,12 +488,12 @@ async function processInfoAnswer(
       currentFieldLabel: f.label,
       totalFields: fields.length,
       fieldSaved: null,
+      nextStep: project.currentStep,
     };
   }
 
   project.answers[f.label] = value;
   project.currentStep = step + 1;
-  project.markModified("answers");
 
   const nextStep = step + 1;
   if (nextStep < fields.length) {
@@ -502,7 +510,7 @@ async function processInfoAnswer(
     const botMsg = `${ack}\n\n${nq}`;
     project.infoChatHistory.push({ role: "bot", content: botMsg });
     trimHistory(project.infoChatHistory);
-    await project.save();
+    await saveProject(project);
     return {
       botMessage: botMsg,
       options: getOptionsForField(nf),
@@ -511,6 +519,7 @@ async function processInfoAnswer(
       currentFieldLabel: nf.label,
       totalFields: fields.length,
       fieldSaved: f.label,
+      nextStep: project.currentStep,
     };
   }
 
@@ -523,7 +532,7 @@ async function processInfoAnswer(
   project.infoChatHistory.push({ role: "bot", content: botMsg });
   trimHistory(project.infoChatHistory);
   project.phase = "review";
-  await project.save();
+  await saveProject(project);
   return {
     botMessage: botMsg,
     phase: "review" as const,
@@ -681,8 +690,7 @@ function getScenarioSteps(scenario: any): any[] {
 }
 
 function persistScenario(project: any) {
-  project.markModified("scenarios");
-  return project.save();
+  return saveProject(project);
 }
 
 function newStepRow(numero: string): any {
@@ -1238,7 +1246,7 @@ export const handleChatMessage = async (
       return;
     }
 
-    const project = await Project.findOne({ clientToken: token });
+    const project = await findProjectByToken(token);
     if (!project) {
       res.status(404).json({ message: "Projet introuvable" });
       return;
@@ -1249,15 +1257,9 @@ export const handleChatMessage = async (
       project.phase = "scenario";
       project.status = "in_progress";
       if (project.scenarios.length === 0) {
-        project.scenarios.push({
-          name: "Scénario 1",
-          currentField: 0,
-          chatHistory: [],
-          answers: {},
-          builder: { state: "collecting" },
-        });
+        project.scenarios.push(newScenarioBlock("Scénario 1"));
       }
-      await project.save();
+      await saveProject(project);
       respond(res, {
         phase: "scenario",
         answers: project.answers,
@@ -1270,15 +1272,22 @@ export const handleChatMessage = async (
     if (userMessage === "__scenario_done__") {
       project.phase = "completed";
       project.status = "completed";
-      await project.save();
+      await saveProject(project);
       respond(res, { phase: "completed" });
       return;
     }
 
     if (userMessage === "__back_to_review__") {
       project.phase = "review";
-      await project.save();
+      await saveProject(project);
       respond(res, { phase: "review", answers: project.answers });
+      return;
+    }
+
+    if (userMessage === "__reset_scenarios__") {
+      project.scenarios = [];
+      await saveProject(project);
+      respond(res, { phase: "scenario", scenarios: project.scenarios });
       return;
     }
 
@@ -1289,7 +1298,7 @@ export const handleChatMessage = async (
       project.answers = { scenes: [] };
       project.infoChatHistory = [];
       project.scenarios = [];
-      await project.save();
+      await saveProject(project);
       respond(res, { phase: "info", reset: true });
       return;
     }
@@ -1342,7 +1351,7 @@ export const handleStepMessage = async (
       return;
     }
 
-    const project = await Project.findOne({ clientToken: token });
+    const project = await findProjectByToken(token);
     if (!project || project.phase !== "scenario") {
       res
         .status(400)
@@ -1397,21 +1406,20 @@ export const addScenarioBlock = async (
   try {
     const { token } = req.params;
     const { name } = req.body;
-    const project = await Project.findOne({ clientToken: token });
+    const project = await findProjectByToken(token);
     if (!project) {
       res.status(404).json({ message: "Projet introuvable" });
       return;
     }
 
-    project.scenarios.push({
-      name: name || `Scénario ${project.scenarios.length + 1}`,
-      currentField: 0,
-      chatHistory: [],
-      answers: {},
-      builder: { state: "collecting" },
-    });
-    project.markModified("scenarios");
-    await project.save();
+    project.scenarios.push(
+      newScenarioBlock(
+        typeof name === "string" && name.trim()
+          ? name.trim()
+          : `Scénario ${project.scenarios.length + 1}`,
+      ),
+    );
+    await saveProject(project);
     respond(res, { scenarios: project.scenarios });
   } catch (err) {
     console.error("Error adding scenario:", err);
@@ -1427,7 +1435,7 @@ export const renameScenarioBlock = async (
     const { token, scenarioIndex } = req.params;
     const { name } = req.body;
     const idx = parseInt(scenarioIndex, 10);
-    const project = await Project.findOne({ clientToken: token });
+    const project = await findProjectByToken(token);
     if (!project) {
       res.status(404).json({ message: "Projet introuvable" });
       return;
@@ -1442,8 +1450,7 @@ export const renameScenarioBlock = async (
       return;
     }
     project.scenarios[idx].name = cleanName;
-    project.markModified("scenarios");
-    await project.save();
+    await saveProject(project);
     respond(res, { scenarios: project.scenarios });
   } catch (err) {
     console.error("Error renaming scenario:", err);
@@ -1458,7 +1465,7 @@ export const deleteScenarioBlock = async (
   try {
     const { token, scenarioIndex } = req.params;
     const idx = parseInt(scenarioIndex, 10);
-    const project = await Project.findOne({ clientToken: token });
+    const project = await findProjectByToken(token);
     if (!project) {
       res.status(404).json({ message: "Projet introuvable" });
       return;
@@ -1468,8 +1475,7 @@ export const deleteScenarioBlock = async (
       return;
     }
     project.scenarios.splice(idx, 1);
-    project.markModified("scenarios");
-    await project.save();
+    await saveProject(project);
     respond(res, { scenarios: project.scenarios });
   } catch (err) {
     console.error("Error deleting scenario:", err);
@@ -1483,7 +1489,7 @@ export const getScenarioBlocks = async (
 ): Promise<void> => {
   try {
     const { token } = req.params;
-    const project = await Project.findOne({ clientToken: token });
+    const project = await findProjectByToken(token);
     if (!project) {
       res.status(404).json({ message: "Projet introuvable" });
       return;
@@ -1506,7 +1512,7 @@ export const addScenarioStepBlock = async (
   try {
     const { token, scenarioIndex } = req.params;
     const sIdx = parseInt(scenarioIndex, 10);
-    const project = await Project.findOne({ clientToken: token });
+    const project = await findProjectByToken(token);
     if (!project) {
       res.status(404).json({ message: "Projet introuvable" });
       return;
@@ -1551,7 +1557,7 @@ export const deleteScenarioStepBlock = async (
     const { token, scenarioIndex, stepIndex } = req.params;
     const sIdx = parseInt(scenarioIndex, 10);
     const stIdx = parseInt(stepIndex, 10);
-    const project = await Project.findOne({ clientToken: token });
+    const project = await findProjectByToken(token);
     if (!project) {
       res.status(404).json({ message: "Projet introuvable" });
       return;
@@ -1590,7 +1596,7 @@ export const finalizeScenarioBlock = async (
   try {
     const { token, scenarioIndex } = req.params;
     const sIdx = parseInt(scenarioIndex, 10);
-    const project = await Project.findOne({ clientToken: token });
+    const project = await findProjectByToken(token);
     if (!project) {
       res.status(404).json({ message: "Projet introuvable" });
       return;

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Conversations | Tadreex Admin',
+  title: 'Conversations',
 };
 
 export default function ConversationsPage() {

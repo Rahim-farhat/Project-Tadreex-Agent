@@ -1,21 +1,21 @@
 .container { display: flex; flex-direction: column; gap: 2rem; }
 .header { display: flex; justify-content: space-between; align-items: center; }
-.title { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 0.25rem; }
+.title { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.025em; margin-bottom: 0.25rem; }
 .subtitle { color: var(--color-text-muted); font-size: 0.95rem; }
-.createBtn { background: var(--color-accent); color: #fff; border: none; padding: 0.75rem 1.25rem; border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; }
+.createBtn { background: var(--color-accent); color: #fff; border: none; padding: 0.55rem 1rem; font-size: 0.875rem; border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; }
 .createBtn:hover { background: var(--color-accent-hover); }
 .loading { text-align: center; padding: 3rem; color: var(--color-text-muted); }
 .tableWrapper { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); overflow: hidden; }
 .table { width: 100%; border-collapse: collapse; }
-.table th, .table td { padding: 1rem 1.25rem; text-align: left; border-bottom: 1px solid var(--color-border); }
-.table th { background: rgba(255,255,255,0.02); font-weight: 600; color: var(--color-text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.table th, .table td { padding: 0.8rem 1.2rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+.table th { background: var(--color-surface-2); font-weight: 500; color: var(--color-text-muted); font-size: 0.78rem; }
 .table tbody tr:hover { background: var(--color-surface-2); }
-.badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 99px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
-.badgeText { background: rgba(108,99,255,0.15); color: var(--color-accent-hover); }
-.badgeRadio { background: rgba(34,197,94,0.15); color: var(--color-success); }
-.badgeCheckbox { background: rgba(251,191,36,0.15); color: #fbbf24; }
-.badgeActive { background: rgba(34,197,94,0.15); color: var(--color-success); }
-.badgeInactive { background: rgba(136,146,164,0.2); color: var(--color-text-muted); }
+.badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 99px; font-size: 0.75rem; font-weight: 500; white-space: nowrap; }
+.badgeText { background: var(--color-accent-glow); color: var(--color-accent-text); }
+.badgeRadio { background: var(--color-success-soft); color: var(--color-success); }
+.badgeCheckbox { background: var(--color-warning-soft); color: var(--color-warning); }
+.badgeActive { background: var(--color-success-soft); color: var(--color-success); }
+.badgeInactive { background: var(--color-surface-2); color: var(--color-text-muted); }
 .optionsList { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .optionTag { background: var(--color-surface-2); border: 1px solid var(--color-border); padding: 0.2rem 0.5rem; border-radius: 99px; font-size: 0.75rem; color: var(--color-text-muted); }
 .actionsCol { text-align: right; white-space: nowrap; }
@@ -57,3 +57,14 @@
 .confirmActions { display: flex; justify-content: center; gap: 1rem; }
 .confirmDeleteBtn { background: var(--color-danger); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; }
 .confirmDeleteBtn:hover { opacity: 0.9; }
+
+/* Toggle rendered as a <button role="switch"> */
+button.toggle {
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background var(--transition);
+}
+button.toggle::after {
+  transition: transform var(--transition);
+}

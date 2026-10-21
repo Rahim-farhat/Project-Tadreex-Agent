@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { setSession } from '@/lib/api';
 import styles from './login.module.css';
 
 export default function AdminLogin() {
@@ -23,7 +24,7 @@ export default function AdminLogin() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         throw new Error(data.message || 'Login failed');
@@ -33,14 +34,17 @@ export default function AdminLogin() {
         throw new Error('Access denied: Admins only');
       }
 
-      // Save token in cookie for middleware
-      document.cookie = `admin_token=${data.token}; path=/; max-age=604800; samesite=strict`;
-      // Also save in localStorage for API calls
-      localStorage.setItem('token', data.token);
+      // Cookie gates the admin pages (proxy), localStorage feeds API calls
+      setSession(data.token);
 
-      router.push('/admin');
+      router.replace('/admin');
+      router.refresh();
     } catch (err: any) {
-      setError(err.message);
+      setError(
+        err instanceof TypeError
+          ? 'Cannot reach the server. Is the API running?'
+          : err.message || 'Login failed',
+      );
     } finally {
       setLoading(false);
     }
@@ -48,14 +52,35 @@ export default function AdminLogin() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.card}>
+      <aside className={styles.showcase} aria-hidden="true">
+        <div className={styles.showcaseBrand}>
+          <img src="/tadreex.png" alt="" className={styles.logoImg} />
+          Tadreex
+        </div>
+        <div className={styles.showcaseBody}>
+          <h2>Scenarios Platform</h2>
+          <p>
+            Clients describe their VR training with an AI assistant. You review every
+            scenario, step by step, in one place.
+          </p>
+          <ul className={styles.steps}>
+            <li><span>1</span>Create a project and share its private link</li>
+            <li><span>2</span>The assistant gathers goals, audience and context</li>
+            <li><span>3</span>Scenarios are built step by step, ready for production</li>
+          </ul>
+        </div>
+        <div className={styles.showcaseFoot}>scenarios.tadreex.com</div>
+      </aside>
+
+      <main className={styles.card}>
         <div className={styles.header}>
-          <div className={styles.logo}><img src="/tadreex.png" alt="Tadreex" className={styles.logoImg} /> Tadreex Admin</div>
-          <p className={styles.subtitle}>Sign in to access the dashboard</p>
+          <img src="/tadreex.png" alt="Tadreex" className={styles.mobileLogo} />
+          <h1 className={styles.heading}>Sign in</h1>
+          <p className={styles.subtitle}>Admin access to Scenarios Platform</p>
         </div>
 
         <form onSubmit={handleLogin} className={styles.form}>
-          {error && <div className={styles.error}>{error}</div>}
+          {error && <div className={styles.error} role="alert">{error}</div>}
           
           <div className={styles.inputGroup}>
             <label htmlFor="email">Email address</label>
@@ -63,10 +88,12 @@ export default function AdminLogin() {
               id="email"
               type="email"
               required
+              autoComplete="email"
+              autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
-              placeholder="admin@tadreex.com"
+              placeholder="you@tadreex.com"
             />
           </div>
 
@@ -76,6 +103,7 @@ export default function AdminLogin() {
               id="password"
               type="password"
               required
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
@@ -87,7 +115,7 @@ export default function AdminLogin() {
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
-      </div>
+      </main>
     </div>
   );
 }

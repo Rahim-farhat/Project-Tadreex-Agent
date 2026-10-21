@@ -1,210 +1,137 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import "./admin.module.css";
-
-function ModelInput() {
-  const [model, setModel] = useState("");
-  const [status, setStatus] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const token =
-          typeof window !== "undefined" ? localStorage.getItem("token") : null;
-        const res = await fetch("/api/admin/settings/model", {
-          credentials: "include",
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!mounted) return;
-        setModel(data.model || "");
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const save = async () => {
-    if (!isEditing) return;
-    setSaving(true);
-    setStatus("");
-    setErrorMsg("");
-    try {
-      const token =
-        typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      const res = await fetch("/api/admin/settings/model", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: "include",
-        body: JSON.stringify({ model }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg =
-          (body && (body.message || body.error || body.err)) ||
-          `HTTP ${res.status}`;
-        setErrorMsg(String(msg));
-        return;
-      }
-      setStatus("Saved");
-      setIsEditing(false);
-      setErrorMsg("");
-      setTimeout(() => setStatus(""), 2000);
-    } catch (err) {
-      setErrorMsg((err as any)?.message || String(err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const startEdit = () => {
-    if (saving) return;
-    setIsEditing(true);
-  };
-
-  return (
-    <div style={{ marginTop: 12 }}>
-      <div style={{ fontSize: 12, opacity: 0.8 }}>Model</div>
-      <div
-        style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}
-      >
-        <input
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          placeholder="llama-3.x-..."
-          style={{ flex: 1 }}
-          disabled={!isEditing}
-        />
-        {!isEditing ? (
-          <button
-            onClick={startEdit}
-            style={{ padding: "6px 8px" }}
-            disabled={saving}
-            title="Edit model"
-          >
-            Edit
-          </button>
-        ) : (
-          <button
-            onClick={save}
-            style={{ padding: "6px 8px" }}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-        )}
-      </div>
-      {errorMsg && (
-        <div style={{ color: "crimson", fontSize: 12, marginTop: 6 }}>
-          {errorMsg}
-        </div>
-      )}
-      {status && !errorMsg && (
-        <div style={{ color: "green", fontSize: 12, marginTop: 6 }}>
-          {status}
-        </div>
-      )}
-    </div>
-  );
-}
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { logout } from "@/lib/api";
+import { Icon, IconName } from "@/components/Icon";
 import styles from "./admin.module.css";
+
+const NAV: { title: string; items: { href: string; label: string; icon: IconName }[] }[] = [
+  {
+    title: "Workspace",
+    items: [
+      { href: "/admin", label: "Overview", icon: "overview" },
+      { href: "/admin/projects", label: "Projects", icon: "projects" },
+    ],
+  },
+  {
+    title: "Configuration",
+    items: [
+      { href: "/admin/fields", label: "Chat fields", icon: "chat" },
+      { href: "/admin/scenario-fields", label: "Scenario fields", icon: "scenario" },
+      { href: "/admin/settings", label: "AI settings", icon: "settings" },
+    ],
+  },
+  {
+    title: "Access",
+    items: [{ href: "/admin/users", label: "Users", icon: "users" }],
+  },
+];
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("tadreex-theme") as
-      | "dark"
-      | "light"
-      | null;
-    if (saved) setTheme(saved);
+    const current = document.documentElement.getAttribute("data-theme");
+    if (current === "light" || current === "dark") setTheme(current);
   }, []);
 
+  // Close the mobile drawer on navigation
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("tadreex-theme", theme);
-  }, [theme]);
+    setMenuOpen(false);
+  }, [pathname]);
 
-  const toggle = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      localStorage.setItem("tadreex-theme", next);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // The login page renders on its own, without the admin shell
+  if (pathname?.startsWith("/admin/login")) {
+    return <>{children}</>;
+  }
+
+  const isActive = (href: string) =>
+    href === "/admin" ? pathname === "/admin" : pathname?.startsWith(href);
+
+  const brand = (
+    <div className={styles.brand}>
+      <img src="/tadreex.png" alt="" className={styles.logoImg} />
+      <div className={styles.brandText}>
+        <span className={styles.brandName}>Scenarios</span>
+        <span className={styles.brandSub}>Platform · Tadreex</span>
+      </div>
+    </div>
+  );
 
   return (
     <div className={styles.shell}>
-      <aside className={styles.sidebar}>
-        <div className={styles.sidebarLogo}>
-          <img src="/tadreex.png" alt="Tadreex" className={styles.logoImg} />
-          <span>Tadreex</span>
-        </div>
+      <header className={styles.mobileBar}>
+        <button
+          className={styles.menuBtn}
+          onClick={() => setMenuOpen((o) => !o)}
+          aria-label="Open menu"
+          aria-expanded={menuOpen}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+        {brand}
+      </header>
+
+      {menuOpen && (
+        <div className={styles.backdrop} onClick={() => setMenuOpen(false)} />
+      )}
+
+      <aside className={`${styles.sidebar} ${menuOpen ? styles.sidebarOpen : ""}`}>
+        <div className={styles.sidebarLogo}>{brand}</div>
         <nav className={styles.nav}>
-          <a href="/admin" className={styles.navItem}>
-            <img
-              src="/overview.png"
-              alt="Overview"
-              className={styles.navIcon}
-            />{" "}
-            Overview
-          </a>
-          <a href="/admin/projects" className={styles.navItem}>
-            <img
-              src="/projects.png"
-              alt="Projects"
-              className={styles.navIcon}
-            />{" "}
-            Projects
-          </a>
-          <a href="/admin/fields" className={styles.navItem}>
-            <img
-              src="/chat-fields.png"
-              alt="Chat Fields"
-              className={styles.navIcon}
-            />{" "}
-            Chat Fields
-          </a>
-          <a href="/admin/scenario-fields" className={styles.navItem}>
-            <img
-              src="/scenario.png"
-              alt="Scenario Fields"
-              className={styles.navIcon}
-            />{" "}
-            Scenario Fields
-          </a>
-          <a href="/admin/users" className={styles.navItem}>
-            <img src="/uers.png" alt="Users" className={styles.navIcon} /> Users
-          </a>
+          {NAV.map((group) => (
+            <div key={group.title} className={styles.navGroup}>
+              <div className={styles.navGroupTitle}>{group.title}</div>
+              {group.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`${styles.navItem} ${isActive(item.href) ? styles.navItemActive : ""}`}
+                  aria-current={isActive(item.href) ? "page" : undefined}
+                >
+                  <Icon name={item.icon} className={styles.navIcon} />
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          ))}
         </nav>
         <div className={styles.sidebarFooter}>
-          <button onClick={toggle} className={styles.themeToggle}>
-            <img
-              src="/night-light-mode.png"
-              alt="Theme"
-              className={styles.themeIcon}
-            />{" "}
-            {theme === "dark" ? "Light" : "Dark"}
+          <button onClick={toggleTheme} className={styles.footerBtn}>
+            <Icon name={theme === "dark" ? "sun" : "moon"} size={16} />
+            {theme === "dark" ? "Light mode" : "Dark mode"}
           </button>
-          <div className={styles.modelConfig}>
-            <ModelInput />
-          </div>
+          <button onClick={logout} className={`${styles.footerBtn} ${styles.logoutBtn}`}>
+            <Icon name="logout" size={16} />
+            Log out
+          </button>
         </div>
       </aside>
 
-      <main className={styles.content}>{children}</main>
+      <main className={styles.content}>
+        <div className={styles.contentInner}>{children}</div>
+      </main>
     </div>
   );
 }

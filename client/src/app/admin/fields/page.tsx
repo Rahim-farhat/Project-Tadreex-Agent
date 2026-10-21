@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { adminFetch, errorMessage } from '@/lib/api';
+import { useToast } from '@/components/useToast';
 import styles from './fields.module.css';
 
 interface ChatField {
@@ -26,6 +28,7 @@ const EMPTY_FIELD: Omit<ChatField, '_id' | 'createdAt'> = {
 };
 
 export default function FieldsPage() {
+  const { toast, Toast } = useToast();
   const [fields, setFields] = useState<ChatField[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -41,7 +44,7 @@ export default function FieldsPage() {
 
   const fetchFields = async () => {
     try {
-      const res = await fetch('/api/admin/chatfields');
+      const res = await adminFetch('/api/admin/chatfields');
       if (res.ok) {
         const data = await res.json();
         setFields(data);
@@ -82,24 +85,30 @@ export default function FieldsPage() {
     setSubmitting(true);
     try {
       if (editingField) {
-        const res = await fetch(`/api/admin/chatfields/${editingField._id}`, {
+        const res = await adminFetch(`/api/admin/chatfields/${editingField._id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(form),
         });
         if (res.ok) {
           setShowModal(false);
+          toast('Enregistré');
           fetchFields();
+        } else {
+          toast(await errorMessage(res, "Échec de l'enregistrement"), 'error');
         }
       } else {
-        const res = await fetch('/api/admin/chatfields', {
+        const res = await adminFetch('/api/admin/chatfields', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(form),
         });
         if (res.ok) {
           setShowModal(false);
+          toast('Enregistré');
           fetchFields();
+        } else {
+          toast(await errorMessage(res, "Échec de l'enregistrement"), 'error');
         }
       }
     } catch (error) {
@@ -112,7 +121,7 @@ export default function FieldsPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/admin/chatfields/${deleteTarget._id}`, {
+      const res = await adminFetch(`/api/admin/chatfields/${deleteTarget._id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -140,12 +149,13 @@ export default function FieldsPage() {
 
   const toggleActive = async (field: ChatField) => {
     try {
-      const res = await fetch(`/api/admin/chatfields/${field._id}`, {
+      const res = await adminFetch(`/api/admin/chatfields/${field._id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !field.active }),
       });
       if (res.ok) fetchFields();
+      else toast(await errorMessage(res, 'Échec de la mise à jour'), 'error');
     } catch (error) {
       console.error('Failed to toggle field', error);
     }
@@ -211,7 +221,10 @@ export default function FieldsPage() {
                     )}
                   </td>
                   <td>
-                    <div
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={field.active}
                       className={`${styles.toggle} ${field.active ? styles.active : ''}`}
                       onClick={() => toggleActive(field)}
                       title={field.active ? 'Désactiver' : 'Activer'}
@@ -297,7 +310,10 @@ export default function FieldsPage() {
                 <div className={styles.formGroup}>
                   <label>Obligatoire</label>
                   <div className={styles.toggleWrapper} style={{ marginTop: '0.5rem' }}>
-                    <div
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={form.required}
                       className={`${styles.toggle} ${form.required ? styles.active : ''}`}
                       onClick={() => setForm((prev) => ({ ...prev, required: !prev.required }))}
                     />
@@ -410,6 +426,7 @@ export default function FieldsPage() {
           </div>
         </div>
       )}
+      <Toast />
     </div>
   );
 }
