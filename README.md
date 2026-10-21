@@ -87,14 +87,22 @@ docker compose exec -T db pg_restore -U scenarios -d scenarios --clean < backup.
 
 ### VPS already runs nginx on 80/443?
 
-Remove the `caddy` service from `docker-compose.yml`, publish the apps on localhost
-(`server: ports: ["127.0.0.1:5000:5000"]`, `client: ports: ["127.0.0.1:3000:3000"]`)
-and proxy from nginx:
+`docker compose up` then fails with `bind: address already in use` on port 80.
+Leave the existing server alone and let it proxy to the apps instead:
 
-```nginx
-location /api/ { proxy_pass http://127.0.0.1:5000; proxy_read_timeout 120s; }
-location /     { proxy_pass http://127.0.0.1:3000; }
+```bash
+docker compose rm -sf caddy
+echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.nginx.yml' >> .env
+docker compose up -d          # db, server, client; apps on 127.0.0.1:5190 / :3190
+sudo cp deploy/nginx-scenarios.conf /etc/nginx/sites-available/scenarios.tadreex.com
+sudo ln -s /etc/nginx/sites-available/scenarios.tadreex.com /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d scenarios.tadreex.com --redirect
 ```
+
+If ports 5190/3190 are taken, set `SERVER_HOST_PORT` / `CLIENT_HOST_PORT` in `.env`
+and use the same ports in the nginx file.
 
 ## Local development
 

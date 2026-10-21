@@ -1,0 +1,16 @@
+# For a VPS whose ports 80/443 are already served by nginx (or another proxy).
+# Enable it by adding this line to .env:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.nginx.yml
+# Caddy is then not started, and the apps listen on localhost only, for the
+# host's nginx to proxy to (see deploy/nginx-scenarios.conf).
+services:
+  caddy:
+    profiles: ["disabled"]
+
+  server:
+    ports:
+      - "127.0.0.1:${SERVER_HOST_PORT:-5190}:5000"
+
+  client:
+    ports:
+      - "127.0.0.1:${CLIENT_HOST_PORT:-3190}:3000"
