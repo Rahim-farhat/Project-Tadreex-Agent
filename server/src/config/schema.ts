@@ -5,12 +5,41 @@ export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
   id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   name        TEXT NOT NULL,
+  username    TEXT,
   email       TEXT NOT NULL UNIQUE,
   password    TEXT NOT NULL,
-  role        TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+  role        TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'manager', 'user')),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'users' AND column_name = 'username'
+  ) THEN
+    ALTER TABLE users ADD COLUMN username TEXT;
+  END IF;
+
+  UPDATE users SET username = LOWER(name) WHERE username IS NULL;
+
+  ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+  ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'manager', 'user'));
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'settings' AND column_name = 'groq_api_key'
+  ) THEN
+    ALTER TABLE settings ADD COLUMN groq_api_key TEXT;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN
+    NULL;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users (LOWER(username)) WHERE username IS NOT NULL;
+
 
 CREATE TABLE IF NOT EXISTS chat_fields (
   id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -46,6 +75,7 @@ CREATE TABLE IF NOT EXISTS settings (
   groq_model_fast        TEXT NOT NULL DEFAULT 'openai/gpt-oss-20b',
   groq_temperature       DOUBLE PRECISION NOT NULL DEFAULT 0.1,
   groq_fast_temperature  DOUBLE PRECISION NOT NULL DEFAULT 0.2,
+  groq_api_key           TEXT,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -68,4 +98,5 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 
 CREATE INDEX IF NOT EXISTS projects_created_at_idx ON projects (created_at DESC);
+CREATE INDEX IF NOT EXISTS projects_created_by_idx ON projects (created_by);
 `;

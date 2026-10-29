@@ -97,8 +97,51 @@ export const newScenarioBlock = (name: string): IScenarioBlock => ({
   builder: { state: 'collecting' },
 });
 
+export interface IProjectWithCreator extends IProject {
+  createdByName?: string | null;
+  createdByUsername?: string | null;
+  createdByRole?: string | null;
+}
+
 export const findProjects = (): Promise<IProject[]> =>
   query<IProject>(`SELECT ${COLUMNS} FROM projects ORDER BY created_at DESC`);
+
+export const findProjectsWithCreator = (): Promise<IProjectWithCreator[]> =>
+  query<IProjectWithCreator>(`
+    SELECT p.id AS "_id", p.title, p.status, p.client_token AS "clientToken", p.created_by AS "createdBy",
+           p.phase, p.current_step AS "currentStep", p.info_chat_history AS "infoChatHistory", p.answers, p.scenarios,
+           p.uploaded_files AS "uploadedFiles", p.sheet_url AS "sheetUrl", p.created_at AS "createdAt", p.updated_at AS "updatedAt",
+           u.name AS "createdByName", COALESCE(u.username, u.name) AS "createdByUsername", u.role AS "createdByRole"
+    FROM projects p
+    LEFT JOIN users u ON p.created_by = u.id
+    ORDER BY p.created_at DESC
+  `);
+
+export const findProjectsByCreator = (creatorId: string): Promise<IProject[]> =>
+  query<IProject>(`SELECT ${COLUMNS} FROM projects WHERE created_by = $1 ORDER BY created_at DESC`, [creatorId]);
+
+export const countProjectsByCreator = async (creatorId: string): Promise<number> => {
+  const rows = await query<{ count: string }>(
+    `SELECT COUNT(*) AS count FROM projects WHERE created_by = $1`,
+    [creatorId],
+  );
+  return parseInt(rows[0]?.count || '0', 10);
+};
+
+export const findProjectsByManager = async (managerId: string): Promise<Array<{
+  _id: string;
+  title: string;
+  status: ProjectStatus;
+  clientToken: string;
+  createdAt: Date;
+}>> => {
+  return query(`
+    SELECT id AS "_id", title, status, client_token AS "clientToken", created_at AS "createdAt"
+    FROM projects
+    WHERE created_by = $1
+    ORDER BY created_at DESC
+  `, [managerId]);
+};
 
 export const findProjectById = async (id: string): Promise<IProject | null> =>
   (await query<IProject>(`SELECT ${COLUMNS} FROM projects WHERE id = $1`, [id]))[0] ?? null;

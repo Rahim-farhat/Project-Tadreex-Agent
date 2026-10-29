@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { adminFetch } from '@/lib/api';
+import { adminFetch, getCurrentUser, SessionUser } from '@/lib/api';
 import { Icon } from '@/components/Icon';
 import styles from './dashboard.module.css';
 
@@ -37,15 +37,25 @@ async function getJson<T>(url: string, fallback: T): Promise<T> {
 
 export default function AdminOverviewPage() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      getJson<ProjectSummary[]>('/api/admin/projects', []),
-      getJson<unknown[]>('/api/admin/chatfields', []),
-      getJson<unknown[]>('/api/admin/scenario-fields', []),
-    ]).then(([projects, chatFields, scenarioFields]) =>
-      setStats({ projects, chatFields: chatFields.length, scenarioFields: scenarioFields.length }),
-    );
+    const curr = getCurrentUser();
+    setUser(curr);
+
+    if (curr?.role === 'manager') {
+      getJson<ProjectSummary[]>('/api/admin/projects', []).then((projects) => {
+        setStats({ projects, chatFields: 0, scenarioFields: 0 });
+      });
+    } else {
+      Promise.all([
+        getJson<ProjectSummary[]>('/api/admin/projects', []),
+        getJson<unknown[]>('/api/admin/chatfields', []),
+        getJson<unknown[]>('/api/admin/scenario-fields', []),
+      ]).then(([projects, chatFields, scenarioFields]) =>
+        setStats({ projects, chatFields: chatFields.length, scenarioFields: scenarioFields.length }),
+      );
+    }
   }, []);
 
   const count = (status: string) => stats?.projects.filter((p) => p.status === status).length ?? 0;
@@ -97,18 +107,33 @@ export default function AdminOverviewPage() {
               : ' '}
           </div>
         </Link>
-        <Link href="/admin/fields" className={styles.statCard}>
-          <div className={styles.statTop}>
-            <span className={styles.statLabel}>Question fields</span>
-            <span className={styles.statIcon}><Icon name="chat" size={16} /></span>
-          </div>
-          <div className={styles.statValue}>
-            {value(stats ? stats.chatFields + stats.scenarioFields : undefined)}
-          </div>
-          <div className={styles.statFoot}>
-            {stats ? `${stats.chatFields} chat · ${stats.scenarioFields} scenario` : ' '}
-          </div>
-        </Link>
+        {user?.role === 'manager' ? (
+          <Link href="/admin/projects" className={styles.statCard}>
+            <div className={styles.statTop}>
+              <span className={styles.statLabel}>Project Quota</span>
+              <span className={styles.statIcon}><Icon name="sparkles" size={16} /></span>
+            </div>
+            <div className={styles.statValue}>
+              {value(stats ? stats.projects.length : undefined)} / 10
+            </div>
+            <div className={styles.statFoot}>
+              {stats ? `${Math.max(0, 10 - stats.projects.length)} slots available` : ' '}
+            </div>
+          </Link>
+        ) : (
+          <Link href="/admin/fields" className={styles.statCard}>
+            <div className={styles.statTop}>
+              <span className={styles.statLabel}>Question fields</span>
+              <span className={styles.statIcon}><Icon name="chat" size={16} /></span>
+            </div>
+            <div className={styles.statValue}>
+              {value(stats ? stats.chatFields + stats.scenarioFields : undefined)}
+            </div>
+            <div className={styles.statFoot}>
+              {stats ? `${stats.chatFields} chat · ${stats.scenarioFields} scenario` : ' '}
+            </div>
+          </Link>
+        )}
       </div>
 
       <section className={styles.panel}>

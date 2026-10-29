@@ -1,9 +1,66 @@
+import util from "util";
 import { Request, Response } from "express";
 import { ChatGroq } from "@langchain/groq";
 import { z } from "zod";
 import { findProjectByToken, newScenarioBlock, saveProject } from "../models/Project";
 import { findChatFields, IChatField } from "../models/ChatField";
 import { findScenarioFields, IScenarioField } from "../models/ScenarioField";
+
+// ─── Rate Limit Error Helpers ──────────────────────────────────────────────────
+
+export const isRateLimitError = (err: any): boolean => {
+  if (!err) return false;
+  if (err.status === 429 || err.statusCode === 429 || err.code === 429) return true;
+  if (typeof err.name === "string" && err.name.includes("RateLimit")) return true;
+  if (err.error?.error?.code === "rate_limit_exceeded" || err.code === "rate_limit_exceeded") return true;
+  const msg = typeof err.message === "string" ? err.message : "";
+  if (
+    msg.includes("Rate limit") ||
+    msg.includes("rate_limit_exceeded") ||
+    msg.includes("429") ||
+    msg.includes("tokens per minute") ||
+    msg.includes("TPM")
+  ) {
+    return true;
+  }
+  if (err.cause && isRateLimitError(err.cause)) return true;
+  return false;
+};
+
+export const formatRateLimitPayload = (prefix: string, err: any) => {
+  const groqMsg =
+    err?.error?.error?.message ||
+    err?.message ||
+    "Rate limit reached on tokens/requests per minute.";
+
+  let retryAfter: string | null = null;
+  if (typeof err?.headers?.get === "function") {
+    retryAfter = err.headers.get("retry-after");
+  } else if (err?.headers && err.headers["retry-after"]) {
+    retryAfter = String(err.headers["retry-after"]);
+  }
+  if (!retryAfter && typeof groqMsg === "string") {
+    const match = groqMsg.match(/try again in ([0-9.]+[a-z]+)/i);
+    if (match) retryAfter = match[1];
+  }
+
+  let inspected = "";
+  try {
+    inspected = util.inspect(err, { depth: 5, colors: false, showHidden: false });
+  } catch {
+    inspected = String(err);
+  }
+
+  const details = inspected.startsWith(prefix) ? inspected : `${prefix}: ${inspected}`;
+
+  return {
+    isRateLimit: true,
+    errorTitle: `${prefix}: RateLimitError [RateLimitQuotaExhaustedError]: 429`,
+    message: groqMsg,
+    details,
+    retryAfter,
+  };
+};
 
 // ─── LLM Singletons ────────────────────────────────────────────────────────────
 
@@ -15,6 +72,7 @@ let groqModelStrong = "openai/gpt-oss-120b";
 let groqModelFast = "openai/gpt-oss-20b";
 let groqTemperature = 0.1;
 let groqFastTemperature = 0.2;
+let groqApiKey: string | undefined = process.env.GROQ_API_KEY;
 
 export const setGroqModelStrong = (m: string) => {
   groqModelStrong = m;
@@ -30,11 +88,16 @@ export const setGroqTemperatures = (t: number, ft: number) => {
   llmStrong = undefined;
   llmFast = undefined;
 };
+export const setGroqApiKey = (key?: string | null) => {
+  groqApiKey = key ? key.trim() : undefined;
+  llmStrong = undefined;
+  llmFast = undefined;
+};
 
 const getStrongLlm = () => {
   if (!llmStrong) {
     llmStrong = new ChatGroq({
-      apiKey: process.env.GROQ_API_KEY,
+      apiKey: groqApiKey || process.env.GROQ_API_KEY,
       model: groqModelStrong,
       temperature: groqTemperature,
     });
@@ -45,7 +108,7 @@ const getStrongLlm = () => {
 const getFastLlm = () => {
   if (!llmFast) {
     llmFast = new ChatGroq({
-      apiKey: process.env.GROQ_API_KEY,
+      apiKey: groqApiKey || process.env.GROQ_API_KEY,
       model: groqModelFast,
       temperature: groqFastTemperature,
     });
@@ -1331,8 +1394,12 @@ export const handleChatMessage = async (
     }
 
     res.status(400).json({ message: "Phase invalide." });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Chatbot error:", err);
+    if (isRateLimitError(err)) {
+      res.status(429).json(formatRateLimitPayload("Chatbot error", err));
+      return;
+    }
     res.status(500).json({ message: "Erreur. Réessayez." });
   }
 };
@@ -1391,8 +1458,12 @@ export const handleStepMessage = async (
     }
 
     respond(res, result);
-  } catch (err) {
+  } catch (err: any) {
     console.error("Step error:", err);
+    if (isRateLimitError(err)) {
+      res.status(429).json(formatRateLimitPayload("Step error", err));
+      return;
+    }
     res.status(500).json({ message: "Erreur. Réessayez." });
   }
 };
@@ -1421,8 +1492,12 @@ export const addScenarioBlock = async (
     );
     await saveProject(project);
     respond(res, { scenarios: project.scenarios });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Error adding scenario:", err);
+    if (isRateLimitError(err)) {
+      res.status(429).json(formatRateLimitPayload("Scenario error", err));
+      return;
+    }
     res.status(500).json({ message: "Erreur ajout scénario." });
   }
 };
@@ -1543,8 +1618,12 @@ export const addScenarioStepBlock = async (
       scenarios: project.scenarios,
       stepIndex: scenario.answers.steps.length - 1,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Error adding step:", err);
+    if (isRateLimitError(err)) {
+      res.status(429).json(formatRateLimitPayload("Step error", err));
+      return;
+    }
     res.status(500).json({ message: "Erreur ajout étape." });
   }
 };
@@ -1609,8 +1688,12 @@ export const finalizeScenarioBlock = async (
     scenario.builder = { state: "done" };
     await persistScenario(project);
     respond(res, { scenarios: project.scenarios, done: true });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Error finalizing scenario:", err);
+    if (isRateLimitError(err)) {
+      res.status(429).json(formatRateLimitPayload("Finalize error", err));
+      return;
+    }
     res.status(500).json({ message: "Erreur finalisation." });
   }
 };

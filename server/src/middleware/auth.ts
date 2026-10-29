@@ -1,10 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
+import { UserRole } from '../models/User';
+
 export interface AuthRequest extends Request {
   user?: {
     id: string;
-    role: 'admin' | 'user';
+    role: UserRole;
   };
 }
 
@@ -20,7 +22,7 @@ export const protect = (req: AuthRequest, res: Response, next: NextFunction): vo
 
   try {
     const secret = process.env.JWT_SECRET as string;
-    const decoded = jwt.verify(token, secret) as { id: string; role: 'admin' | 'user' };
+    const decoded = jwt.verify(token, secret) as { id: string; role: UserRole };
     req.user = decoded;
     next();
   } catch {
@@ -34,7 +36,7 @@ export const optionalAuth = (req: AuthRequest, res: Response, next: NextFunction
     const token = authHeader.split(' ')[1];
     try {
       const secret = process.env.JWT_SECRET as string;
-      const decoded = jwt.verify(token, secret) as { id: string; role: 'admin' | 'user' };
+      const decoded = jwt.verify(token, secret) as { id: string; role: UserRole };
       req.user = decoded;
     } catch {
       // ignore invalid token for optional auth

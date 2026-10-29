@@ -1,32 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { logout } from "@/lib/api";
+import { getCurrentUser, logout, SessionUser } from "@/lib/api";
 import { Icon, IconName } from "@/components/Icon";
 import styles from "./admin.module.css";
 
-const NAV: { title: string; items: { href: string; label: string; icon: IconName }[] }[] = [
-  {
-    title: "Workspace",
-    items: [
-      { href: "/admin", label: "Overview", icon: "overview" },
-      { href: "/admin/projects", label: "Projects", icon: "projects" },
-    ],
-  },
-  {
-    title: "Configuration",
-    items: [
-      { href: "/admin/fields", label: "Chat fields", icon: "chat" },
-      { href: "/admin/scenario-fields", label: "Scenario fields", icon: "scenario" },
-      { href: "/admin/settings", label: "AI settings", icon: "settings" },
-    ],
-  },
-  {
-    title: "Access",
-    items: [{ href: "/admin/users", label: "Users", icon: "users" }],
-  },
+interface NavGroup {
+  title: string;
+  items: { href: string; label: string; icon: IconName }[];
+}
+
+const ADMIN_ONLY_PATHS = [
+  "/admin/fields",
+  "/admin/scenario-fields",
+  "/admin/settings",
+  "/admin/managers",
+  "/admin/users",
 ];
 
 export default function AdminLayout({
@@ -37,6 +28,11 @@ export default function AdminLayout({
   const pathname = usePathname();
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [user, setUser] = useState<SessionUser | null>(null);
+
+  useEffect(() => {
+    setUser(getCurrentUser());
+  }, []);
 
   useEffect(() => {
     const current = document.documentElement.getAttribute("data-theme");
@@ -63,6 +59,39 @@ export default function AdminLayout({
   if (pathname?.startsWith("/admin/login")) {
     return <>{children}</>;
   }
+
+  const isManager = user?.role === "manager";
+  const isBlocked = isManager && ADMIN_ONLY_PATHS.some((path) => pathname?.startsWith(path));
+
+  const navGroups: NavGroup[] = useMemo(() => {
+    const workspaceGroup: NavGroup = {
+      title: "Workspace",
+      items: [
+        { href: "/admin", label: "Overview", icon: "overview" },
+        { href: "/admin/projects", label: "Projects", icon: "projects" },
+      ],
+    };
+
+    if (isManager) {
+      return [workspaceGroup];
+    }
+
+    return [
+      workspaceGroup,
+      {
+        title: "Configuration",
+        items: [
+          { href: "/admin/fields", label: "Chat fields", icon: "chat" },
+          { href: "/admin/scenario-fields", label: "Scenario fields", icon: "scenario" },
+          { href: "/admin/settings", label: "AI settings", icon: "settings" },
+        ],
+      },
+      {
+        title: "Access",
+        items: [{ href: "/admin/managers", label: "Managers", icon: "users" }],
+      },
+    ];
+  }, [isManager]);
 
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname?.startsWith(href);
@@ -100,7 +129,7 @@ export default function AdminLayout({
       <aside className={`${styles.sidebar} ${menuOpen ? styles.sidebarOpen : ""}`}>
         <div className={styles.sidebarLogo}>{brand}</div>
         <nav className={styles.nav}>
-          {NAV.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.title} className={styles.navGroup}>
               <div className={styles.navGroupTitle}>{group.title}</div>
               {group.items.map((item) => (
@@ -117,7 +146,20 @@ export default function AdminLayout({
             </div>
           ))}
         </nav>
+
         <div className={styles.sidebarFooter}>
+          {user && (
+            <div className={styles.userBadge}>
+              <div className={styles.userInfo}>
+                <span className={styles.userName}>
+                  {user.username || user.name || (user.role === 'admin' ? 'Admin' : 'Manager')}
+                </span>
+              </div>
+              <span className={`${styles.userRole} ${user.role === 'admin' ? styles.roleAdmin : styles.roleManager}`}>
+                {user.role}
+              </span>
+            </div>
+          )}
           <button onClick={toggleTheme} className={styles.footerBtn}>
             <Icon name={theme === "dark" ? "sun" : "moon"} size={16} />
             {theme === "dark" ? "Light mode" : "Dark mode"}
@@ -130,7 +172,22 @@ export default function AdminLayout({
       </aside>
 
       <main className={styles.content}>
-        <div className={styles.contentInner}>{children}</div>
+        <div className={styles.contentInner}>
+          {isBlocked ? (
+            <div className={styles.unauthorizedBox}>
+              <div className={styles.unauthorizedIcon}>🔒</div>
+              <h1 className={styles.unauthorizedTitle}>Access Restricted</h1>
+              <p className={styles.unauthorizedText}>
+                Only administrators have permission to modify configuration settings and manage platform managers.
+              </p>
+              <Link href="/admin/projects" className={styles.unauthorizedBtn}>
+                <Icon name="projects" size={16} /> Go to Projects
+              </Link>
+            </div>
+          ) : (
+            children
+          )}
+        </div>
       </main>
     </div>
   );

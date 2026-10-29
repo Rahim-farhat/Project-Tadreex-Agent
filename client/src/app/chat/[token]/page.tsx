@@ -13,6 +13,13 @@ interface ChatMessage {
   inputDisabled?: boolean;
 }
 
+interface RateLimitInfo {
+  title?: string;
+  message?: string;
+  details?: string;
+  retryAfter?: string | null;
+}
+
 function SuggestionPicker({
   suggestions,
   disabled,
@@ -258,6 +265,52 @@ export default function ChatbotPage() {
   const [renameName, setRenameName] = useState("");
   const [renamingScenario, setRenamingScenario] = useState(false);
 
+  // Rate Limit Modal
+  const [rateLimitInfo, setRateLimitInfo] = useState<RateLimitInfo | null>(null);
+  const [copiedRateLimit, setCopiedRateLimit] = useState(false);
+
+  const checkAndShowRateLimit = (
+    res: Response,
+    data: any,
+    prefix = "Step error",
+  ): boolean => {
+    const is429 = res.status === 429;
+    const isRl =
+      data?.isRateLimit ||
+      is429 ||
+      (typeof data?.message === "string" &&
+        (data.message.includes("Rate limit") ||
+          data.message.includes("rate_limit_exceeded") ||
+          data.message.includes("429") ||
+          data.message.includes("TPM")));
+
+    if (isRl) {
+      const details =
+        data?.details ||
+        (typeof data?.message === "string" && data.message.includes("RateLimitError")
+          ? data.message
+          : `${prefix}: RateLimitError [RateLimitQuotaExhaustedError]: 429 ${
+              typeof data === "object" ? JSON.stringify(data, null, 2) : String(data)
+            }`);
+      setRateLimitInfo({
+        title:
+          data?.errorTitle ||
+          `${prefix}: RateLimitError [RateLimitQuotaExhaustedError]: 429`,
+        message:
+          data?.message ||
+          "Rate limit reached for model on tokens per minute (TPM).",
+        details,
+        retryAfter:
+          data?.retryAfter ||
+          (typeof data?.message === "string"
+            ? data.message.match(/try again in ([0-9.]+[a-z]+)/i)?.[1]
+            : null),
+      });
+      return true;
+    }
+    return false;
+  };
+
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
@@ -341,6 +394,9 @@ export default function ChatbotPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (checkAndShowRateLimit(res, data, "Chatbot error")) {
+          return;
+        }
         setInfoMessages([
           { role: "bot", content: data.message || "Erreur. Réessayez." },
         ]);
@@ -372,6 +428,7 @@ export default function ChatbotPage() {
   const sendInfoMessage = async (text: string) => {
     if (!text.trim() || infoSending) return;
 
+    const prevMsgs = [...infoMessages];
     const displayContent =
       text === "__help__" ? "J'ai besoin d'aide pour cette étape." : text;
     setInfoMessages((prev) => [
@@ -388,11 +445,15 @@ export default function ChatbotPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userMessage: text }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Erreur. Réessayez.");
+        if (checkAndShowRateLimit(res, data, "Chatbot error")) {
+          setInfoInput(text);
+          setInfoMessages(prevMsgs);
+          return;
+        }
+        throw new Error(data.message || "Erreur. Réessayez.");
       }
-      const data = await res.json();
 
       if (data.phase === "review") {
         setPhase("review");
@@ -462,12 +523,14 @@ export default function ChatbotPage() {
     if (editingKey) await saveEdit();
     setConfirming(true);
     let res: Response;
+    let data: any = {};
     try {
       res = await fetch(`/api/public/chat/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userMessage: "__confirm__" }),
       });
+      data = await res.json().catch(() => ({}));
     } catch {
       setConfirming(false);
       showNotice("Erreur de connexion. Réessayez.");
@@ -475,10 +538,12 @@ export default function ChatbotPage() {
     }
     setConfirming(false);
     if (!res.ok) {
-      showNotice("Erreur lors de la confirmation. Réessayez.");
+      if (checkAndShowRateLimit(res, data, "Chatbot error")) {
+        return;
+      }
+      showNotice(data.message || "Erreur lors de la confirmation. Réessayez.");
       return;
     }
-    const data = await res.json();
     setPhase("scenario");
     setAnswers(data.answers || {});
     setScenarios(data.scenarios || []);
@@ -500,8 +565,13 @@ export default function ChatbotPage() {
           body: JSON.stringify({ userMessage: "__init__" }),
         },
       );
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (checkAndShowRateLimit(res, data, "Step error")) {
+          return;
+        }
+        return;
+      }
       if (Array.isArray(data.scenarios)) setScenarios(data.scenarios);
       setStepMessages((prev) => ({
         ...prev,
@@ -567,11 +637,18 @@ export default function ChatbotPage() {
           body: JSON.stringify({ userMessage: text }),
         },
       );
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Erreur. Réessayez.");
+        if (checkAndShowRateLimit(res, data, "Step error")) {
+          setStepInput(text);
+          setStepMessages((prev) => ({
+            ...prev,
+            [sIdx]: { ...(prev[sIdx] || {}), [stpIdx]: msgs },
+          }));
+          return;
+        }
+        throw new Error(data.message || "Erreur. Réessayez.");
       }
-      const data = await res.json();
       if (Array.isArray(data.scenarios)) setScenarios(data.scenarios);
       const botTurn: ChatMessage = {
         role: "bot",
@@ -642,6 +719,9 @@ export default function ChatbotPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (checkAndShowRateLimit(res, data, "Step error")) {
+          return null;
+        }
         showNotice(data.message || "Erreur. Réessayez.");
         return null;
       }
@@ -1034,6 +1114,99 @@ export default function ChatbotPage() {
     </div>
   ) : null;
 
+  const rateLimitModal = rateLimitInfo ? (
+    <div
+      className={styles.rateLimitOverlay}
+      onClick={() => setRateLimitInfo(null)}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className={styles.rateLimitModal}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={styles.rateLimitHeader}>
+          <div className={styles.rateLimitTitleWrapper}>
+            <div className={styles.rateLimitWarningIcon}>⚠️</div>
+            <div>
+              <h2 className={styles.rateLimitHeading}>
+                {rateLimitInfo.title || "Erreur de Limite de Taux (429)"}
+              </h2>
+              <p className={styles.rateLimitSubheading}>
+                Le quota de requêtes ou tokens par minute (TPM / RPM) a été dépassé.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className={styles.rateLimitCloseIconBtn}
+            onClick={() => setRateLimitInfo(null)}
+            title="Fermer"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className={styles.rateLimitBody}>
+          {rateLimitInfo.retryAfter && (
+            <div className={styles.rateLimitRetryBanner}>
+              <span className={styles.retryTimerIcon}>⏳</span>
+              <span>
+                Temps d'attente recommandé :{" "}
+                <strong>{rateLimitInfo.retryAfter}</strong> avant de réessayer.
+              </span>
+            </div>
+          )}
+
+          {rateLimitInfo.message && (
+            <div className={styles.rateLimitMessageCard}>
+              <div className={styles.rateLimitMessageTitle}>
+                Message Groq
+              </div>
+              <div className={styles.rateLimitMessageText}>
+                {rateLimitInfo.message}
+              </div>
+            </div>
+          )}
+
+          <div className={styles.rateLimitCodeSection}>
+            <div className={styles.rateLimitCodeHeader}>
+              <span>Détails techniques de l'erreur</span>
+              <button
+                type="button"
+                className={`${styles.rateLimitCopyBtn} ${
+                  copiedRateLimit ? styles.rateLimitCopyBtnSuccess : ""
+                }`}
+                onClick={() => {
+                  const toCopy =
+                    rateLimitInfo.details || rateLimitInfo.message || "";
+                  navigator.clipboard.writeText(toCopy);
+                  setCopiedRateLimit(true);
+                  setTimeout(() => setCopiedRateLimit(false), 2000);
+                }}
+              >
+                {copiedRateLimit ? "✓ Copié !" : "Copier l'erreur"}
+              </button>
+            </div>
+            <pre className={styles.rateLimitCodePre}>
+              <code>{rateLimitInfo.details || rateLimitInfo.message}</code>
+            </pre>
+          </div>
+        </div>
+
+        <div className={styles.rateLimitFooter}>
+          <button
+            type="button"
+            className={styles.rateLimitDismissBtn}
+            onClick={() => setRateLimitInfo(null)}
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   // ─── Loading / Error ────────────────────────────────────────
 
   if (phase === "loading") {
@@ -1200,6 +1373,7 @@ export default function ChatbotPage() {
           </button>
         </main>
         {noticeBanner}
+        {rateLimitModal}
       </div>
     );
   }
@@ -1560,6 +1734,7 @@ export default function ChatbotPage() {
           </div>
         )}
         {noticeBanner}
+        {rateLimitModal}
       </div>
     );
   }
@@ -1580,6 +1755,7 @@ export default function ChatbotPage() {
         totalInfoFields,
       )}
       {noticeBanner}
+      {rateLimitModal}
     </div>
   );
 }

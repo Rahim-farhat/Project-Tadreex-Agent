@@ -16,6 +16,9 @@ import {
   setGroqModelStrong,
   setGroqModelFast,
   setGroqTemperatures,
+  setGroqApiKey,
+  isRateLimitError,
+  formatRateLimitPayload,
 } from "./controllers/chatbot.controller";
 
 if (!process.env.JWT_SECRET) {
@@ -46,8 +49,10 @@ app.get("/api/health", (_req, res) => {
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
 
-// Admin routes — every one of them requires an authenticated admin
-app.use("/api/admin/projects", protect, adminOnly, projectRoutes);
+// Project routes — authenticated users (admin sees all, managers see/create up to 10 of their own)
+app.use("/api/admin/projects", protect, projectRoutes);
+
+// Admin-only routes — only the admin can change chat/scenario fields and manage settings/managers
 app.use("/api/admin/chatfields", protect, adminOnly, chatfieldRoutes);
 app.use("/api/admin/scenario-fields", protect, adminOnly, scenariofieldRoutes);
 app.use("/api/admin", adminRoutes);
@@ -72,6 +77,11 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     res.status(413).json({ message: "Request body too large" });
     return;
   }
+  if (isRateLimitError(err)) {
+    console.error("Unhandled RateLimit error:", err);
+    res.status(429).json(formatRateLimitPayload("Step error", err));
+    return;
+  }
   console.error("Unhandled error:", err);
   res.status(500).json({ message: "Internal server error" });
 });
@@ -86,6 +96,9 @@ const start = async () => {
     setGroqModelStrong(s.groqModelStrong);
     setGroqModelFast(s.groqModelFast);
     setGroqTemperatures(s.groqTemperature, s.groqFastTemperature);
+    if (s.groqApiKey) {
+      setGroqApiKey(s.groqApiKey);
+    }
     console.log("Loaded GROQ model settings from DB");
   } catch (err) {
     console.warn("Could not load settings:", err);

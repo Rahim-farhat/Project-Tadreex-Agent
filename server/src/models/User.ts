@@ -1,16 +1,19 @@
 import bcrypt from 'bcryptjs';
 import { query } from '../config/db';
 
+export type UserRole = 'admin' | 'manager' | 'user';
+
 export interface IUser {
   _id: string;
   name: string;
+  username: string;
   email: string;
-  role: 'admin' | 'user';
+  role: UserRole;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const COLUMNS = `id AS "_id", name, email, role, created_at AS "createdAt", updated_at AS "updatedAt"`;
+const COLUMNS = `id AS "_id", name, COALESCE(username, name) AS username, email, role, created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 export const hashPassword = async (password: string): Promise<string> =>
   bcrypt.hash(password, await bcrypt.genSalt(10));
@@ -18,14 +21,32 @@ export const hashPassword = async (password: string): Promise<string> =>
 export const findUsers = (): Promise<IUser[]> =>
   query<IUser>(`SELECT ${COLUMNS} FROM users ORDER BY created_at DESC`);
 
-export const findUserByEmail = async (email: string): Promise<IUser | null> =>
-  (await query<IUser>(`SELECT ${COLUMNS} FROM users WHERE email = $1`, [email]))[0] ?? null;
+export const findManagers = (): Promise<IUser[]> =>
+  query<IUser>(`SELECT ${COLUMNS} FROM users WHERE role = 'manager' ORDER BY created_at DESC`);
 
-// Returns the user only when the password matches
-export const verifyCredentials = async (email: string, password: string): Promise<IUser | null> => {
+export const findUserById = async (id: string): Promise<IUser | null> =>
+  (await query<IUser>(`SELECT ${COLUMNS} FROM users WHERE id = $1`, [id]))[0] ?? null;
+
+export const findUserByEmail = async (email: string): Promise<IUser | null> =>
+  (await query<IUser>(`SELECT ${COLUMNS} FROM users WHERE LOWER(email) = LOWER($1)`, [email.trim()]))[0] ?? null;
+
+export const findUserByUsername = async (username: string): Promise<IUser | null> => {
+  const clean = username.trim().toLowerCase();
+  return (
+    await query<IUser>(
+      `SELECT ${COLUMNS} FROM users WHERE LOWER(username) = $1 OR LOWER(name) = $1 OR LOWER(email) = $1`,
+      [clean],
+    )
+  )[0] ?? null;
+};
+
+// Returns the user only when the password matches (accepts username or email)
+export const verifyCredentials = async (identifier: string, password: string): Promise<IUser | null> => {
+  const clean = identifier.trim().toLowerCase();
   const rows = await query<IUser & { password: string }>(
-    `SELECT ${COLUMNS}, password FROM users WHERE email = $1`,
-    [email],
+    `SELECT ${COLUMNS}, password FROM users
+     WHERE LOWER(email) = $1 OR LOWER(COALESCE(username, '')) = $1 OR LOWER(name) = $1`,
+    [clean],
   );
   const row = rows[0];
   if (!row || !(await bcrypt.compare(password, row.password))) return null;
@@ -35,13 +56,29 @@ export const verifyCredentials = async (email: string, password: string): Promis
 
 export const createUser = async (data: {
   name: string;
+  username?: string;
   email: string;
   password: string;
-  role?: 'admin' | 'user';
+  role?: UserRole;
 }): Promise<IUser> => {
+  const username = (data.username || data.name).trim();
   const rows = await query<IUser>(
-    `INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING ${COLUMNS}`,
-    [data.name.trim(), data.email, await hashPassword(data.password), data.role ?? 'user'],
+    `INSERT INTO users (name, username, email, password, role)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING ${COLUMNS}`,
+    [data.name.trim(), username, data.email.trim().toLowerCase(), await hashPassword(data.password), data.role ?? 'user'],
+  );
+  return rows[0];
+};
+
+export const createManager = async (username: string, password: string): Promise<IUser> => {
+  const trimmed = username.trim();
+  const email = trimmed.includes('@') ? trimmed.toLowerCase() : `${trimmed.toLowerCase()}@tadreex.local`;
+  const rows = await query<IUser>(
+    `INSERT INTO users (name, username, email, password, role)
+     VALUES ($1, $2, $3, $4, 'manager')
+     RETURNING ${COLUMNS}`,
+    [trimmed, trimmed, email, await hashPassword(password)],
   );
   return rows[0];
 };

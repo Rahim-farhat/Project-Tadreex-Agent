@@ -5,6 +5,7 @@ import {
   setGroqModelStrong,
   setGroqModelFast,
   setGroqTemperatures,
+  setGroqApiKey,
 } from "./chatbot.controller";
 
 const isValidTemperature = (t: unknown): t is number =>
@@ -22,6 +23,7 @@ export const getModelSettings = async (
       fastModel: s.groqModelFast,
       temperature: s.groqTemperature,
       fastTemperature: s.groqFastTemperature,
+      apiKey: s.groqApiKey ?? process.env.GROQ_API_KEY ?? "",
     });
   } catch (error) {
     console.error("Get settings error:", error);
@@ -35,7 +37,7 @@ export const setModelSettings = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { model, fastModel, temperature, fastTemperature } = req.body;
+    const { model, fastModel, temperature, fastTemperature, apiKey } = req.body;
 
     if (model !== undefined && (typeof model !== "string" || !model.trim())) {
       res.status(400).json({ message: "Model name cannot be empty" });
@@ -63,12 +65,18 @@ export const setModelSettings = async (
     if (typeof temperature === "number") s.groqTemperature = temperature;
     if (typeof fastTemperature === "number")
       s.groqFastTemperature = fastTemperature;
+    if (apiKey !== undefined) {
+      s.groqApiKey = typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : null;
+    }
     await saveSettings(s);
 
     // Update in-memory LLM config
     if (typeof model === "string") setGroqModelStrong(s.groqModelStrong);
     if (typeof fastModel === "string") setGroqModelFast(s.groqModelFast);
     setGroqTemperatures(s.groqTemperature, s.groqFastTemperature);
+    if (apiKey !== undefined) {
+      setGroqApiKey(s.groqApiKey);
+    }
 
     res.json({
       message: "Settings updated",
@@ -77,6 +85,7 @@ export const setModelSettings = async (
         fastModel: s.groqModelFast,
         temperature: s.groqTemperature,
         fastTemperature: s.groqFastTemperature,
+        apiKey: s.groqApiKey ?? process.env.GROQ_API_KEY ?? "",
       },
     });
   } catch (error) {

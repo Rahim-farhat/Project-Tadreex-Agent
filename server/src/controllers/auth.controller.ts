@@ -43,21 +43,35 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { password } = req.body;
-    const email = normalizeEmail(req.body.email);
+    const identifier =
+      typeof req.body.username === 'string' && req.body.username.trim()
+        ? req.body.username.trim()
+        : typeof req.body.email === 'string' && req.body.email.trim()
+        ? req.body.email.trim()
+        : '';
 
-    if (!email || !password) {
-      res.status(400).json({ message: 'Email and password are required' });
+    if (!identifier || !password) {
+      res.status(400).json({ message: 'Username/email and password are required' });
       return;
     }
 
-    const user = await verifyCredentials(email, String(password));
+    const user = await verifyCredentials(identifier, String(password));
     if (!user) {
       res.status(401).json({ message: 'Invalid credentials' });
       return;
     }
 
     const token = generateToken(user._id, user.role);
-    res.json({ token, user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        username: user.username || user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Error signing in' });

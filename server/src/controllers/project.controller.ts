@@ -2,10 +2,13 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import {
   PROJECT_STATUSES,
+  countProjectsByCreator,
   createProject as insertProject,
   deleteProjectById,
   findProjectById,
   findProjects,
+  findProjectsByCreator,
+  findProjectsWithCreator,
   saveProject,
 } from '../models/Project';
 
@@ -13,9 +16,13 @@ const isValidStatus = (status: unknown) =>
   status === undefined || PROJECT_STATUSES.includes(status as any);
 
 // GET /api/admin/projects
-export const getProjects = async (_req: AuthRequest, res: Response): Promise<void> => {
+export const getProjects = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    res.json(await findProjects());
+    if (req.user?.role === 'manager') {
+      res.json(await findProjectsByCreator(req.user.id));
+      return;
+    }
+    res.json(await findProjectsWithCreator());
   } catch (error) {
     console.error('Get projects error:', error);
     res.status(500).json({ message: 'Error fetching projects' });
@@ -30,6 +37,12 @@ export const getProjectById = async (req: AuthRequest, res: Response): Promise<v
       res.status(404).json({ message: 'Project not found' });
       return;
     }
+
+    if (req.user?.role === 'manager' && project.createdBy !== req.user.id) {
+      res.status(403).json({ message: 'Access denied: not your project' });
+      return;
+    }
+
     res.json(project);
   } catch (error) {
     console.error('Get project error:', error);
@@ -45,6 +58,17 @@ export const createProject = async (req: AuthRequest, res: Response): Promise<vo
     if (typeof title !== 'string' || !title.trim()) {
       res.status(400).json({ message: 'Project title is required' });
       return;
+    }
+
+    // Manager role is limited to at most 10 projects
+    if (req.user?.role === 'manager') {
+      const count = await countProjectsByCreator(req.user.id);
+      if (count >= 10) {
+        res.status(403).json({
+          message: 'Project limit reached. Managers can create up to 10 projects.',
+        });
+        return;
+      }
     }
 
     res.status(201).json(await insertProject(title, req.user?.id));
@@ -67,6 +91,12 @@ export const updateProject = async (req: AuthRequest, res: Response): Promise<vo
       res.status(404).json({ message: 'Project not found' });
       return;
     }
+
+    if (req.user?.role === 'manager' && project.createdBy !== req.user.id) {
+      res.status(403).json({ message: 'Access denied: not your project' });
+      return;
+    }
+
     if (typeof title === 'string' && title.trim()) project.title = title.trim();
     if (status) project.status = status;
     res.json(await saveProject(project));
@@ -79,6 +109,17 @@ export const updateProject = async (req: AuthRequest, res: Response): Promise<vo
 // DELETE /api/admin/projects/:id
 export const deleteProject = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const project = await findProjectById(req.params.id);
+    if (!project) {
+      res.status(404).json({ message: 'Project not found' });
+      return;
+    }
+
+    if (req.user?.role === 'manager' && project.createdBy !== req.user.id) {
+      res.status(403).json({ message: 'Access denied: not your project' });
+      return;
+    }
+
     if (!(await deleteProjectById(req.params.id))) {
       res.status(404).json({ message: 'Project not found' });
       return;
@@ -102,6 +143,11 @@ export const updateProjectAnswers = async (req: AuthRequest, res: Response): Pro
     const project = await findProjectById(req.params.id);
     if (!project) {
       res.status(404).json({ message: 'Project not found' });
+      return;
+    }
+
+    if (req.user?.role === 'manager' && project.createdBy !== req.user.id) {
+      res.status(403).json({ message: 'Access denied: not your project' });
       return;
     }
 

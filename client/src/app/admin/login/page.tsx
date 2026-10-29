@@ -6,7 +6,7 @@ import { setSession } from '@/lib/api';
 import styles from './login.module.css';
 
 export default function AdminLogin() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,7 +21,11 @@ export default function AdminLogin() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          username: identifier,
+          email: identifier,
+          password,
+        }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -30,12 +34,17 @@ export default function AdminLogin() {
         throw new Error(data.message || 'Login failed');
       }
 
-      if (data.user?.role !== 'admin') {
-        throw new Error('Access denied: Admins only');
+      if (data.user?.role !== 'admin' && data.user?.role !== 'manager') {
+        throw new Error('Access denied: Unauthorized role');
       }
 
       // Cookie gates the admin pages (proxy), localStorage feeds API calls
       setSession(data.token);
+      try {
+        localStorage.setItem('user', JSON.stringify(data.user));
+      } catch {
+        /* ignore */
+      }
 
       router.replace('/admin');
       router.refresh();
@@ -76,24 +85,24 @@ export default function AdminLogin() {
         <div className={styles.header}>
           <img src="/tadreex.png" alt="Tadreex" className={styles.mobileLogo} />
           <h1 className={styles.heading}>Sign in</h1>
-          <p className={styles.subtitle}>Admin access to Scenarios Platform</p>
+          <p className={styles.subtitle}>Sign in to your Tadreex workspace</p>
         </div>
 
         <form onSubmit={handleLogin} className={styles.form}>
           {error && <div className={styles.error} role="alert">{error}</div>}
           
           <div className={styles.inputGroup}>
-            <label htmlFor="email">Email address</label>
+            <label htmlFor="identifier">Username or email</label>
             <input
-              id="email"
-              type="email"
+              id="identifier"
+              type="text"
               required
-              autoComplete="email"
+              autoComplete="username"
               autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               disabled={loading}
-              placeholder="you@tadreex.com"
+              placeholder="username or you@tadreex.com"
             />
           </div>
 

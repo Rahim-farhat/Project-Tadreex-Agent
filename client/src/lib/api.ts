@@ -19,9 +19,39 @@ export function setSession(token: string): void {
   document.cookie = `${COOKIE_NAME}=${token}; path=/; max-age=604800; samesite=strict`;
 }
 
+export interface SessionUser {
+  id: string;
+  role: 'admin' | 'manager' | 'user';
+  name?: string;
+  username?: string;
+  email?: string;
+}
+
+export function getCurrentUser(): SessionUser | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('user');
+    if (raw) return JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return {
+      id: payload.id,
+      role: payload.role || 'user',
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function clearSession(): void {
   try {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem('user');
   } catch {
     /* ignore */
   }

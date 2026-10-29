@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { adminFetch, errorMessage } from '@/lib/api';
+import { adminFetch, errorMessage, getCurrentUser, SessionUser } from '@/lib/api';
 import { useToast } from '@/components/useToast';
 import { Icon } from '@/components/Icon';
 import styles from './projects.module.css';
@@ -13,6 +13,10 @@ interface Project {
   status: string;
   clientToken: string;
   createdAt: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdByUsername?: string;
+  createdByRole?: string;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -27,7 +31,12 @@ export default function ProjectsPage() {
   const [loadError, setLoadError] = useState('');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [user, setUser] = useState<SessionUser | null>(null);
   const { toast, Toast } = useToast();
+
+  const isManager = user?.role === 'manager';
+  const isAdmin = user?.role === 'admin';
+  const atLimit = isManager && projects.length >= 10;
 
   // Create
   const [showCreate, setShowCreate] = useState(false);
@@ -43,7 +52,10 @@ export default function ProjectsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => { fetchProjects(); }, []);
+  useEffect(() => {
+    setUser(getCurrentUser());
+    fetchProjects();
+  }, []);
 
   // Close any open modal with Escape
   useEffect(() => {
@@ -78,13 +90,22 @@ export default function ProjectsPage() {
     return projects.filter(
       (p) =>
         (statusFilter === 'all' || p.status === statusFilter) &&
-        (!q || p.title.toLowerCase().includes(q)),
+        (!q ||
+          p.title.toLowerCase().includes(q) ||
+          p.createdByUsername?.toLowerCase().includes(q) ||
+          p.createdByName?.toLowerCase().includes(q)),
     );
   }, [projects, query, statusFilter]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
+
+    if (atLimit) {
+      toast('Project limit reached. Managers can create up to 10 projects.', 'error');
+      return;
+    }
+
     setCreating(true);
     try {
       const res = await adminFetch('/api/admin/projects', {
@@ -163,11 +184,34 @@ export default function ProjectsPage() {
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>Projects</h1>
-          <p className={styles.subtitle}>Each project has a private link you share with the client.</p>
+          <p className={styles.subtitle}>
+            {isManager
+              ? 'Manage your training scenario projects. You can create up to 10 projects.'
+              : 'Each project has a private link you share with the client.'}
+          </p>
         </div>
-        <button className={styles.createBtn} onClick={() => setShowCreate(true)}>
-          <Icon name="plus" size={16} /> New project
-        </button>
+        <div className={styles.headerActions}>
+          {isManager && (
+            <div className={`${styles.quotaPill} ${atLimit ? styles.quotaPillLimit : ''}`}>
+              <Icon name="sparkles" size={14} />
+              <span>Quota: {projects.length} / 10 used</span>
+            </div>
+          )}
+          <button
+            className={styles.createBtn}
+            onClick={() => {
+              if (atLimit) {
+                toast('Project limit reached. Managers can create up to 10 projects.', 'error');
+                return;
+              }
+              setShowCreate(true);
+            }}
+            disabled={atLimit}
+            title={atLimit ? 'You have reached the maximum limit of 10 projects' : 'Create new project'}
+          >
+            <Icon name="plus" size={16} /> New project
+          </button>
+        </div>
       </div>
 
       {!loading && projects.length > 0 && (
@@ -177,7 +221,7 @@ export default function ProjectsPage() {
           <input
             type="search"
             className={styles.searchInput}
-            placeholder="Search projects…"
+            placeholder={isAdmin ? "Search projects or creator…" : "Search projects…"}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search projects"
@@ -215,6 +259,7 @@ export default function ProjectsPage() {
               <tr>
                 <th>Title</th>
                 <th>Status</th>
+                {isAdmin && <th>Created by</th>}
                 <th className={styles.dateCol}>Created</th>
                 <th className={styles.actionsCol}><span className={styles.srOnly}>Actions</span></th>
               </tr>
@@ -232,6 +277,19 @@ export default function ProjectsPage() {
                       {STATUS_LABEL[project.status] || project.status}
                     </span>
                   </td>
+                  {isAdmin && (
+                    <td data-label="Created by">
+                      {project.createdByRole === 'manager' ? (
+                        <span className={styles.creatorBadgeManager} title={`Manager: @${project.createdByUsername || 'manager'}`}>
+                          <Icon name="users" size={12} /> @{project.createdByUsername || 'manager'}
+                        </span>
+                      ) : (
+                        <span className={styles.creatorBadgeAdmin} title="Admin project">
+                          <Icon name="shield" size={12} /> Admin
+                        </span>
+                      )}
+                    </td>
+                  )}
                   <td className={styles.dateCol} data-label="Created">
                     {new Date(project.createdAt).toLocaleDateString()}
                   </td>
