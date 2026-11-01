@@ -370,3 +370,15 @@
   color: var(--color-accent);
   border-color: var(--color-accent);
 }
+
+.modeTag {
+  display: inline-block;
+  margin-right: 0.5rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--color-accent-glow);
+  color: var(--color-accent-text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}

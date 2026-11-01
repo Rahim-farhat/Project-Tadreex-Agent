@@ -2,9 +2,15 @@ import { query } from '../config/db';
 
 export type ScenarioFieldType = 'text' | 'radio' | 'checkbox';
 
+export type ProjectMode = 'beginner' | 'intermediate' | 'expert';
+export const PROJECT_MODES: ProjectMode[] = ['beginner', 'intermediate', 'expert'];
+// A field is asked in a mode when its level rank is <= the mode's rank
+export const MODE_RANK: Record<ProjectMode, number> = { beginner: 0, intermediate: 1, expert: 2 };
+
 export interface IScenarioField {
   _id: string;
   key: string;
+  level: ProjectMode;
   label: string;
   description: string;
   forbidden: string;
@@ -19,12 +25,13 @@ export interface IScenarioField {
 
 export type ScenarioFieldInput = Partial<Omit<IScenarioField, '_id' | 'createdAt' | 'updatedAt'>>;
 
-const COLUMNS = `id AS "_id", key, label, description, forbidden, type, options, required,
+const COLUMNS = `id AS "_id", key, level, label, description, forbidden, type, options, required,
   sort_order AS "order", active, created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 // API field name -> column name
 const WRITABLE: Record<keyof ScenarioFieldInput, string> = {
   key: 'key',
+  level: 'level',
   label: 'label',
   description: 'description',
   forbidden: 'forbidden',

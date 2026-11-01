@@ -11,7 +11,26 @@ import {
   finalizeScenarioBlock,
 } from '../controllers/chatbot.controller';
 
+import {
+  getModeState,
+  submitBrainstorm,
+  backToBrainstorm,
+  fixField,
+  suggestField,
+  refineChat,
+  goFinal,
+} from '../controllers/modeflow.controller';
+
 const router = Router();
+
+// Mode flow: brainstorm -> refine -> final
+router.get('/:token/mode', getModeState);
+router.post('/:token/brainstorm', submitBrainstorm);
+router.post('/:token/brainstorm/back', backToBrainstorm);
+router.post('/:token/refine/fix', fixField);
+router.post('/:token/refine/suggest', suggestField);
+router.post('/:token/refine/chat', refineChat);
+router.post('/:token/final', goFinal);
 
 // Info phase + confirm
 router.post('/:token', handleChatMessage);

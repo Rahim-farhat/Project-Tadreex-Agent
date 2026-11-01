@@ -30,6 +30,7 @@ interface Project {
   title: string;
   status: string;
   clientToken: string;
+  mode?: string | null;
   currentStep: number;
   answers: Record<string, any>;
   scenarios: ScenarioBlock[];
@@ -258,7 +259,7 @@ export default function ProjectDetailPage() {
           </Link>
           <h1 className={styles.title}>{project.title}</h1>
           <p className={styles.tokenText}>
-            Client link:{' '}
+            {project.mode && <span className={styles.modeTag}>{project.mode}</span>}Client link:{' '}
             <a href={`/chat/${project.clientToken}`} target="_blank" rel="noreferrer">
               <code>/chat/{project.clientToken}</code>
             </a>{' '}

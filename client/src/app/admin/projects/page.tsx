@@ -12,6 +12,7 @@ interface Project {
   title: string;
   status: string;
   clientToken: string;
+  mode?: 'beginner' | 'intermediate' | 'expert' | null;
   createdAt: string;
   createdBy?: string;
   createdByName?: string;
@@ -41,6 +42,7 @@ export default function ProjectsPage() {
   // Create
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  const [newMode, setNewMode] = useState<'beginner' | 'intermediate' | 'expert'>('beginner');
   const [creating, setCreating] = useState(false);
 
   // Rename
@@ -110,7 +112,7 @@ export default function ProjectsPage() {
     try {
       const res = await adminFetch('/api/admin/projects', {
         method: 'POST',
-        body: JSON.stringify({ title: newTitle.trim() }),
+        body: JSON.stringify({ title: newTitle.trim(), mode: newMode }),
       });
       if (res.ok) {
         setNewTitle('');
@@ -271,6 +273,7 @@ export default function ProjectsPage() {
                     <Link href={`/admin/projects/${project._id}`} className={styles.projectLink}>
                       {project.title}
                     </Link>
+                    {project.mode && <span className={styles.modeBadge}>{project.mode}</span>}
                   </td>
                   <td data-label="Status">
                     <span className={`${styles.badge} ${styles[project.status] || ''}`}>
@@ -334,6 +337,14 @@ export default function ProjectsPage() {
               <div className={styles.formGroup}>
                 <label htmlFor="new-title">Project Title</label>
                 <input id="new-title" type="text" required autoFocus placeholder="e.g. Acme Corp Onboarding" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} disabled={creating} />
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="new-mode">Client mode</label>
+                <select id="new-mode" value={newMode} onChange={(e) => setNewMode(e.target.value as typeof newMode)} disabled={creating}>
+                  <option value="beginner">Beginner: scenario and steps only</option>
+                  <option value="intermediate">Intermediate: adds interactions and 3D objects</option>
+                  <option value="expert">Expert: everything (UI, animations, sounds, validation)</option>
+                </select>
               </div>
               <div className={styles.modalActions}>
                 <button type="button" onClick={() => setShowCreate(false)} className={styles.cancelBtn}>Cancel</button>

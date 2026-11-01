@@ -11,6 +11,7 @@ interface ScenarioField {
   label: string;
   description: string;
   forbidden: string;
+  level: 'beginner' | 'intermediate' | 'expert';
   type: 'text' | 'radio' | 'checkbox';
   options: string[];
   required: boolean;
@@ -24,6 +25,7 @@ const EMPTY_FIELD: Omit<ScenarioField, '_id' | 'createdAt'> = {
   label: '',
   description: '',
   forbidden: '',
+  level: 'expert',
   type: 'text',
   options: [],
   required: true,
@@ -71,6 +73,7 @@ export default function ScenarioFieldsPage() {
       label: field.label,
       description: field.description || '',
       forbidden: field.forbidden || '',
+      level: field.level || 'expert',
       type: field.type,
       options: [...(field.options || [])],
       required: field.required !== false,
@@ -186,6 +189,7 @@ export default function ScenarioFieldsPage() {
                 <th style={{ width: '180px' }}>Intitulé</th>
                 <th>Ce qui est attendu</th>
                 <th>Interdit dans l&apos;Aide</th>
+                <th>Niveau</th>
                 <th style={{ width: '90px' }}>Statut</th>
                 <th className={styles.actionsCol} style={{ width: '140px' }}>Actions</th>
               </tr>
@@ -211,6 +215,11 @@ export default function ScenarioFieldsPage() {
                     <div style={{ fontSize: '0.82rem', color: 'var(--color-danger, #ef4444)' }}>
                       {field.forbidden ? `⛔ ${field.forbidden}` : '—'}
                     </div>
+                  </td>
+                  <td>
+                    <span className={`${styles.levelTag} ${styles['level' + ((field.level || 'expert').charAt(0).toUpperCase() + (field.level || 'expert').slice(1))] || ''}`}>
+                      {{ beginner: 'Débutant', intermediate: 'Intermédiaire', expert: 'Expert' }[field.level || 'expert']}
+                    </span>
                   </td>
                   <td>
                     <div className={styles.toggleWrapper}>
@@ -239,7 +248,7 @@ export default function ScenarioFieldsPage() {
               ))}
               {fields.length === 0 && (
                 <tr>
-                  <td colSpan={7} className={styles.emptyState}>
+                  <td colSpan={8} className={styles.emptyState}>
                     Aucun champ de scénario configuré.
                   </td>
                 </tr>
@@ -294,6 +303,19 @@ export default function ScenarioFieldsPage() {
                   onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                   disabled={submitting}
                 />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Niveau minimum (le champ est demandé à partir de ce mode)</label>
+                <select
+                  value={form.level}
+                  onChange={(e) => setForm((p) => ({ ...p, level: e.target.value as ScenarioField['level'] }))}
+                  disabled={submitting}
+                >
+                  <option value="beginner">Débutant</option>
+                  <option value="intermediate">Intermédiaire</option>
+                  <option value="expert">Expert</option>
+                </select>
               </div>
 
               <div className={styles.formGroup}>

@@ -2,6 +2,7 @@ import "dotenv/config";
 import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import { connectDB } from "./config/db";
+import { seedScenarioFields } from "./config/seed";
 import { protect, adminOnly } from "./middleware/auth";
 import authRoutes from "./routes/auth.routes";
 import adminRoutes from "./routes/admin.routes";
@@ -89,6 +90,7 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 const start = async () => {
   await connectDB();
+  await seedScenarioFields();
   await ensureAdminUser();
   // Load model settings from DB
   try {

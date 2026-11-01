@@ -11,6 +11,7 @@ import {
   findProjectsWithCreator,
   saveProject,
 } from '../models/Project';
+import { PROJECT_MODES } from '../models/ScenarioField';
 
 const isValidStatus = (status: unknown) =>
   status === undefined || PROJECT_STATUSES.includes(status as any);
@@ -53,10 +54,14 @@ export const getProjectById = async (req: AuthRequest, res: Response): Promise<v
 // POST /api/admin/projects
 export const createProject = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title } = req.body;
+    const { title, mode } = req.body;
 
     if (typeof title !== 'string' || !title.trim()) {
       res.status(400).json({ message: 'Project title is required' });
+      return;
+    }
+    if (mode !== undefined && mode !== null && !PROJECT_MODES.includes(mode)) {
+      res.status(400).json({ message: 'Invalid mode' });
       return;
     }
 
@@ -71,7 +76,7 @@ export const createProject = async (req: AuthRequest, res: Response): Promise<vo
       }
     }
 
-    res.status(201).json(await insertProject(title, req.user?.id));
+    res.status(201).json(await insertProject(title, req.user?.id, mode));
   } catch (error) {
     console.error('Create project error:', error);
     res.status(500).json({ message: 'Error creating project' });

@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from 'crypto';
 import { query } from '../config/db';
+import type { ProjectMode } from './ScenarioField';
 
 const TOKEN_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
@@ -61,7 +62,7 @@ export interface IScenarioBlock {
 }
 
 export type ProjectStatus = 'draft' | 'in_progress' | 'completed';
-export type ProjectPhase = 'info' | 'review' | 'scenario' | 'completed';
+export type ProjectPhase = 'info' | 'review' | 'scenario' | 'brainstorm' | 'refine' | 'final' | 'completed';
 
 // A project is loaded as a plain object, mutated by the controllers, then
 // written back in full with saveProject().
@@ -71,6 +72,9 @@ export interface IProject {
   status: ProjectStatus;
   clientToken: string;
   createdBy?: string | null;
+  // null = legacy step-by-step chat; otherwise brainstorm -> refine -> final flow
+  mode?: ProjectMode | null;
+  brainstormText: string;
   phase: ProjectPhase;
   currentStep: number;
   infoChatHistory: IChatTurn[];
@@ -85,7 +89,7 @@ export interface IProject {
 export const PROJECT_STATUSES: ProjectStatus[] = ['draft', 'in_progress', 'completed'];
 
 const COLUMNS = `id AS "_id", title, status, client_token AS "clientToken", created_by AS "createdBy",
-  phase, current_step AS "currentStep", info_chat_history AS "infoChatHistory", answers, scenarios,
+  mode, brainstorm_text AS "brainstormText", phase, current_step AS "currentStep", info_chat_history AS "infoChatHistory", answers, scenarios,
   uploaded_files AS "uploadedFiles", sheet_url AS "sheetUrl", created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 export const newScenarioBlock = (name: string): IScenarioBlock => ({
@@ -109,7 +113,7 @@ export const findProjects = (): Promise<IProject[]> =>
 export const findProjectsWithCreator = (): Promise<IProjectWithCreator[]> =>
   query<IProjectWithCreator>(`
     SELECT p.id AS "_id", p.title, p.status, p.client_token AS "clientToken", p.created_by AS "createdBy",
-           p.phase, p.current_step AS "currentStep", p.info_chat_history AS "infoChatHistory", p.answers, p.scenarios,
+           p.mode, p.brainstorm_text AS "brainstormText", p.phase, p.current_step AS "currentStep", p.info_chat_history AS "infoChatHistory", p.answers, p.scenarios,
            p.uploaded_files AS "uploadedFiles", p.sheet_url AS "sheetUrl", p.created_at AS "createdAt", p.updated_at AS "updatedAt",
            u.name AS "createdByName", COALESCE(u.username, u.name) AS "createdByUsername", u.role AS "createdByRole"
     FROM projects p
@@ -149,11 +153,15 @@ export const findProjectById = async (id: string): Promise<IProject | null> =>
 export const findProjectByToken = async (token: string): Promise<IProject | null> =>
   (await query<IProject>(`SELECT ${COLUMNS} FROM projects WHERE client_token = $1`, [token]))[0] ?? null;
 
-export const createProject = async (title: string, createdBy?: string): Promise<IProject> =>
+export const createProject = async (
+  title: string,
+  createdBy?: string,
+  mode?: ProjectMode | null,
+): Promise<IProject> =>
   (
     await query<IProject>(
-      `INSERT INTO projects (title, client_token, created_by) VALUES ($1, $2, $3) RETURNING ${COLUMNS}`,
-      [title.trim(), generateToken(), createdBy ?? null],
+      `INSERT INTO projects (title, client_token, created_by, mode) VALUES ($1, $2, $3, $4) RETURNING ${COLUMNS}`,
+      [title.trim(), generateToken(), createdBy ?? null, mode ?? null],
     )
   )[0];
 
@@ -165,7 +173,7 @@ export const saveProject = async (p: IProject): Promise<IProject> => {
     `UPDATE projects SET
        title = $2, status = $3, phase = $4, current_step = $5,
        info_chat_history = $6, answers = $7, scenarios = $8, uploaded_files = $9,
-       sheet_url = $10, updated_at = now()
+       sheet_url = $10, brainstorm_text = $11, updated_at = now()
      WHERE id = $1 RETURNING updated_at AS "updatedAt"`,
     [
       p._id,
@@ -178,6 +186,7 @@ export const saveProject = async (p: IProject): Promise<IProject> => {
       JSON.stringify(p.scenarios ?? []),
       JSON.stringify(p.uploadedFiles ?? []),
       p.sheetUrl ?? null,
+      p.brainstormText ?? '',
     ],
   );
   if (rows[0]) p.updatedAt = rows[0].updatedAt;

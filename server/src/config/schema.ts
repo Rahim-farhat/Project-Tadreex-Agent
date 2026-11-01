@@ -99,4 +99,22 @@ CREATE TABLE IF NOT EXISTS projects (
 
 CREATE INDEX IF NOT EXISTS projects_created_at_idx ON projects (created_at DESC);
 CREATE INDEX IF NOT EXISTS projects_created_by_idx ON projects (created_by);
+
+-- Client modes (beginner / intermediate / expert). A NULL mode keeps the legacy step-by-step chat.
+ALTER TABLE scenario_fields ADD COLUMN IF NOT EXISTS level TEXT NOT NULL DEFAULT 'expert';
+ALTER TABLE scenario_fields DROP CONSTRAINT IF EXISTS scenario_fields_level_check;
+ALTER TABLE scenario_fields ADD CONSTRAINT scenario_fields_level_check
+  CHECK (level IN ('beginner', 'intermediate', 'expert'));
+
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS levels_initialized BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS mode TEXT;
+ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_mode_check;
+ALTER TABLE projects ADD CONSTRAINT projects_mode_check
+  CHECK (mode IS NULL OR mode IN ('beginner', 'intermediate', 'expert'));
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS brainstorm_text TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_phase_check;
+ALTER TABLE projects ADD CONSTRAINT projects_phase_check
+  CHECK (phase IN ('info', 'review', 'scenario', 'brainstorm', 'refine', 'final', 'completed'));
 `;

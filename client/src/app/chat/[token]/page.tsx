@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import styles from "./chat.module.css";
 import { Icon } from "@/components/Icon";
+import ModeFlow from "./ModeFlow";
 
 interface ChatMessage {
   role: "user" | "bot";
@@ -215,9 +216,16 @@ export default function ChatbotPage() {
 
   // Core state
   const [phase, setPhase] = useState<
-    "loading" | "info" | "review" | "scenario" | "completed" | "error"
+    "loading" | "info" | "review" | "scenario" | "mode" | "completed" | "error"
   >("loading");
   const [error, setError] = useState("");
+  // Projects created with a mode use the brainstorm -> refine -> final flow
+  const [projectMode, setProjectMode] = useState<
+    "beginner" | "intermediate" | "expert" | null
+  >(null);
+  const [modePhase, setModePhase] = useState<"brainstorm" | "refine" | "final">(
+    "brainstorm",
+  );
   // Transient banner for failed actions (network/server errors)
   const [notice, setNotice] = useState("");
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -350,6 +358,7 @@ export default function ChatbotPage() {
         return;
       }
       const projectData = await projectRes.json();
+      setProjectMode(projectData.mode || null);
 
       if (projectData.phase === "completed") {
         setPhase("completed");
@@ -359,6 +368,15 @@ export default function ChatbotPage() {
       if (projectData.phase === "review") {
         setPhase("review");
         setAnswers(projectData.answers || {});
+        return;
+      }
+
+      if (
+        projectData.mode &&
+        ["brainstorm", "refine", "final"].includes(projectData.phase)
+      ) {
+        setModePhase(projectData.phase);
+        setPhase("mode");
         return;
       }
 
@@ -542,6 +560,11 @@ export default function ChatbotPage() {
         return;
       }
       showNotice(data.message || "Erreur lors de la confirmation. Réessayez.");
+      return;
+    }
+    if (data.phase === "brainstorm") {
+      setModePhase("brainstorm");
+      setPhase("mode");
       return;
     }
     setPhase("scenario");
@@ -1248,6 +1271,23 @@ export default function ChatbotPage() {
   }
 
   // ─── Completed ──────────────────────────────────────────────
+
+  if (phase === "mode" && projectMode) {
+    return (
+      <>
+        <ModeFlow
+          token={token}
+          mode={projectMode}
+          initialPhase={modePhase}
+          onCompleted={() => setPhase("completed")}
+          onRateLimit={checkAndShowRateLimit}
+          onNotice={showNotice}
+        />
+        {noticeBanner}
+        {rateLimitModal}
+      </>
+    );
+  }
 
   if (phase === "completed") {
     return (

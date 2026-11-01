@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import {
+  PROJECT_MODES,
   ScenarioFieldInput,
   createScenarioField as insertScenarioField,
   deleteScenarioField as removeScenarioField,
@@ -39,11 +40,13 @@ export const getScenarioFieldById = async (req: Request, res: Response): Promise
 
 export const createScenarioField = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { key, label, description, forbidden, type, options, required, order, active } = req.body;
+    const { key, level, label, description, forbidden, type, options, required, order, active } = req.body;
     if (typeof label !== 'string' || !label.trim()) { res.status(400).json({ message: 'Field label is required' }); return; }
     if (type !== undefined && !FIELD_TYPES.includes(type)) { res.status(400).json({ message: 'Invalid field type' }); return; }
+    if (level !== undefined && !PROJECT_MODES.includes(level)) { res.status(400).json({ message: 'Invalid field level' }); return; }
     const field = await insertScenarioField({
       key: typeof key === 'string' && key.trim() ? key.trim() : toKey(label),
+      level: level ?? 'expert',
       label: label.trim(),
       description: typeof description === 'string' ? description.trim() : '',
       forbidden: typeof forbidden === 'string' ? forbidden.trim() : '',
@@ -63,9 +66,11 @@ export const createScenarioField = async (req: Request, res: Response): Promise<
 
 export const updateScenarioField = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { key, label, description, forbidden, type, options, required, order, active } = req.body;
+    const { key, level, label, description, forbidden, type, options, required, order, active } = req.body;
     if (type !== undefined && !FIELD_TYPES.includes(type)) { res.status(400).json({ message: 'Invalid field type' }); return; }
+    if (level !== undefined && !PROJECT_MODES.includes(level)) { res.status(400).json({ message: 'Invalid field level' }); return; }
     const patch: ScenarioFieldInput = {};
+    if (level !== undefined) patch.level = level;
     if (typeof key === 'string' && key.trim()) patch.key = key.trim();
     if (typeof label === 'string' && label.trim()) patch.label = label.trim();
     if (typeof description === 'string') patch.description = description.trim();

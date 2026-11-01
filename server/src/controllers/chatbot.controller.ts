@@ -94,7 +94,7 @@ export const setGroqApiKey = (key?: string | null) => {
   llmFast = undefined;
 };
 
-const getStrongLlm = () => {
+export const getStrongLlm = () => {
   if (!llmStrong) {
     llmStrong = new ChatGroq({
       apiKey: groqApiKey || process.env.GROQ_API_KEY,
@@ -740,7 +740,7 @@ const STEP_FIELD_CONTEXT: Record<string, string> = {
   validation: STEP_FIELD_SPECS.validation.description,
 };
 
-function getScenarioSteps(scenario: any): any[] {
+export function getScenarioSteps(scenario: any): any[] {
   if (
     scenario.answers &&
     typeof scenario.answers === "object" &&
@@ -756,7 +756,7 @@ function persistScenario(project: any) {
   return saveProject(project);
 }
 
-function newStepRow(numero: string): any {
+export function newStepRow(numero: string): any {
   return {
     numero,
     titre: "",
@@ -771,7 +771,7 @@ function newStepRow(numero: string): any {
   };
 }
 
-function getScenarioFieldSpec(
+export function getScenarioFieldSpec(
   fieldKey: string,
   dbFields?: IScenarioField[],
 ) {
@@ -972,7 +972,7 @@ function stepResponse(
   };
 }
 
-async function validateStepField(
+export async function validateStepField(
   fieldKey: string,
   msg: string,
   projectAnswers?: Record<string, any>,
@@ -1058,7 +1058,7 @@ async function askStepField(
   return response.content.toString().trim();
 }
 
-async function sendStepSuggestions(
+export async function sendStepSuggestions(
   fieldKey: string,
   scenarioName: string,
   stepIndex: number,
@@ -1319,6 +1319,13 @@ export const handleChatMessage = async (
     if (userMessage === "__confirm__") {
       project.phase = "scenario";
       project.status = "in_progress";
+      // Mode projects go brainstorm -> refine -> final instead of the per-step chat
+      if (project.mode) {
+        project.phase = "brainstorm";
+        await saveProject(project);
+        respond(res, { phase: "brainstorm", answers: project.answers });
+        return;
+      }
       if (project.scenarios.length === 0) {
         project.scenarios.push(newScenarioBlock("Scénario 1"));
       }
@@ -1361,6 +1368,7 @@ export const handleChatMessage = async (
       project.answers = { scenes: [] };
       project.infoChatHistory = [];
       project.scenarios = [];
+      project.brainstormText = "";
       await saveProject(project);
       respond(res, { phase: "info", reset: true });
       return;
